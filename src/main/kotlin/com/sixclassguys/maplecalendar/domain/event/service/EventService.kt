@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
@@ -21,11 +22,21 @@ class EventService(
     private val log = LoggerFactory.getLogger(javaClass)
     private val formatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME
 
+    fun getEventsByMonth(year: Int, month: Int): List<Event> {
+        val startOfMonth = LocalDateTime.of(year, month, 1, 0, 0)
+        val endOfMonth = startOfMonth.plusMonths(1).minusNanos(1)
+
+        return eventRepository.findAllByStartDateLessThanEqualAndEndDateGreaterThanEqual(
+            endOfMonth,
+            startOfMonth
+        )
+    }
+
     @Transactional
     fun refreshAndCheckEvents() {
         val dtos = nexonApiClient.getRecent20Events()
 
-        updateDatabase(dtos)
+        updateEvents(dtos)
 
         val todayStart = LocalDate.now().atStartOfDay() // 오늘 00:00:00
         val todayEnd = LocalDate.now().atTime(LocalTime.MAX) // 오늘 23:59:59
@@ -42,7 +53,7 @@ class EventService(
         }
     }
 
-    private fun updateDatabase(dtos: List<EventNotice>) {
+    private fun updateEvents(dtos: List<EventNotice>) {
         dtos.forEach { dto ->
             // 이벤트의 날짜를 LocalDateTime으로 파싱
             val eventStartDate = OffsetDateTime.parse(dto.dateEventStart).toLocalDateTime()
