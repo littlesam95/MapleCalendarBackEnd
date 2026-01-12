@@ -21,4 +21,15 @@ class EventController(private val eventService: EventService) {
 
         return ResponseEntity.ok(events)
     }
+
+    @GetMapping("/today")
+    fun getTodayEvents(
+        @RequestParam year: Int,
+        @RequestParam month: Int,
+        @RequestParam day: Int
+    ): ResponseEntity<List<Event>> {
+        val events = eventService.getTodayEvents(year, month, day)
+
+        return ResponseEntity.ok(events)
+    }
 }

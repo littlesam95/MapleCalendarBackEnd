@@ -22,6 +22,12 @@ class EventService(
     private val log = LoggerFactory.getLogger(javaClass)
     private val formatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME
 
+    fun getTodayEvents(year: Int, month: Int, day: Int): List<Event> {
+        val today = LocalDateTime.of(year, month, day, 0, 0)
+
+        return eventRepository.getEventsForToday(today)
+    }
+
     fun getEventsByMonth(year: Int, month: Int): List<Event> {
         val startOfMonth = LocalDateTime.of(year, month, 1, 0, 0)
         val endOfMonth = startOfMonth.plusMonths(1).minusNanos(1)
