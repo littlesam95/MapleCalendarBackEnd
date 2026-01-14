@@ -4,38 +4,82 @@ import com.google.firebase.messaging.AndroidConfig
 import com.google.firebase.messaging.FirebaseMessaging
 import com.google.firebase.messaging.Message
 import com.google.firebase.messaging.Notification
+import com.sixclassguys.maplecalendar.domain.eventalarm.entity.EventAlarm
+import com.sixclassguys.maplecalendar.domain.eventalarm.repository.EventAlarmRepository
+import com.sixclassguys.maplecalendar.domain.member.repository.MemberRepository
 import com.sixclassguys.maplecalendar.domain.notification.dto.TokenRequest
 import com.sixclassguys.maplecalendar.domain.notification.entity.NotificationToken
 import com.sixclassguys.maplecalendar.domain.notification.repository.NotificationTokenRepository
 import com.sixclassguys.maplecalendar.infrastructure.persistence.event.EventRepository
 import org.slf4j.LoggerFactory
+import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
+import java.time.temporal.ChronoUnit
 
 @Service
 @Transactional
 class NotificationService(
     private val notificationTokenRepository: NotificationTokenRepository,
-    private val eventRepository: EventRepository
+    private val eventRepository: EventRepository,
+    private val memberRepository: MemberRepository,
+    private val eventAlarmRepository: EventAlarmRepository
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
 
-    fun registerToken(request: TokenRequest) {
+    private fun sendFcmMessage(alarmSetting: EventAlarm) {
+        val member = alarmSetting.member
+        val event = alarmSetting.event
+
+        // 💡 남은 일수 계산
+        val daysLeft = ChronoUnit.DAYS.between(LocalDate.now(), event.endDate.toLocalDate())
+        val dDayText = when {
+            daysLeft > 0L -> "${daysLeft}일 남았습니다!"
+            daysLeft == 0L -> "오늘 종료됩니다! 서두르세요!"
+            else -> "종료되었습니다."
+        }
+
+        member.tokens.forEach { tokenEntity ->
+            val message = Message.builder()
+                .setToken(tokenEntity.token)
+                .setNotification(
+                    Notification.builder()
+                        .setTitle("⏰ 설정하신 알림 시간입니다!")
+                        .setBody("[${event.title}] $dDayText") // 💡 남은 기간 표시
+                        .build()
+                )
+                .putData("eventId", event.id.toString())
+                .putData("type", "EVENT_ALARM")
+                .build()
+
+            try {
+                FirebaseMessaging.getInstance().send(message)
+                log.info("개별 알람 발송 성공: 유저=${member.id}, 이벤트=${event.id}")
+            } catch (e: Exception) {
+                log.error("푸시 실패: ${tokenEntity.token.take(10)}... - ${e.message}")
+            }
+        }
+    }
+
+    fun registerToken(request: TokenRequest, memberId: Long? = null) {
         val existingToken = notificationTokenRepository.findByToken(request.token)
+        val member = memberId?.let { memberRepository.findByIdOrNull(it) }
 
         if (existingToken != null) {
             existingToken.platform = request.platform
             existingToken.lastRegisteredAt = LocalDateTime.now()
-            // JPA의 Dirty Checking으로 인해, 별도의 save 호출 없이도 업데이트가 가능하다.
+            // 💡 로그인 상태라면 토큰의 주인(Member)을 업데이트
+            if (member != null) existingToken.member = member
         } else {
             notificationTokenRepository.save(
                 NotificationToken(
                     token = request.token,
-                    platform = request.platform
+                    platform = request.platform,
+                    member = member // 💡 새 토큰 생성 시 멤버 연결
                 )
             )
         }
@@ -56,15 +100,15 @@ class NotificationService(
             "일퀘 몬파 하러갑시다!"
         )
         val body = if (endingEvents.isNotEmpty()) {
-            "오늘 종료되는 이벤트가 ${endingEvents.size}개 있습니다! 늦기 전에 확인하세요."
+            val eventNames = endingEvents.take(2).joinToString(", ") { it.title }
+            val suffix = if (endingEvents.size > 2) " 외 ${endingEvents.size - 2}개" else ""
+            "오늘 [$eventNames]$suffix 이벤트가 종료됩니다! 보상을 수령하셨나요?"
         } else { randomMessages.random() }
 
         // 3. 모든 토큰 조회
-        val tokens = notificationTokenRepository.findAll()
-        if (tokens.isEmpty()) {
-            log.info("등록된 FCM 토큰이 없어 알림을 보내지 않았습니다.")
-            return
-        }
+        val tokens = notificationTokenRepository.findAllByMemberIsGlobalAlarmEnabledTrue()
+
+        if (tokens.isEmpty()) return
 
         // 4. 발송 로직
         tokens.forEach { tokenEntity ->
@@ -89,5 +133,42 @@ class NotificationService(
                 log.error("푸시 알림 발송 실패: ${e.message}")
             }
         }
+    }
+
+    /**
+     * 사용자가 개별 설정한 알람 시간에 맞춰 푸시 발송
+     * 스케줄러에 의해 매 분(1분 단위) 호출됨
+     */
+    fun sendCustomEventNotifications() {
+        val now = LocalDateTime.now().withSecond(0).withNano(0)
+
+        // 💡 쿼리 단계에서 isEnabled = true인 것만 가져오도록 수정 (Repository 쿼리 확인 필요)
+        val activeAlarms = eventAlarmRepository.findAllToSendMessage(now)
+
+        activeAlarms.forEach { alarmSetting ->
+            val targets = alarmSetting.alarmTimes.filter { it.alarmTime <= now && !it.isSent }
+
+            targets.forEach { target ->
+                target.isSent = true
+
+                // 3. 💡 [조건부 발송]
+                // - 알람 설정이 켜져 있고(isEnabled)
+                // - 정확히 '현재 시각'에 해당하는 알람인 경우에만 실제로 발송
+                if (alarmSetting.isEnabled && target.alarmTime == now) {
+                    sendFcmMessage(alarmSetting) // 실제 FCM 발송 로직 분리
+                } else if (target.alarmTime < now) {
+                    log.info("과거 알람(시간: ${target.alarmTime})을 미발송 처리하고 완료 상태로 갱신합니다. 유저: ${alarmSetting.member.id}")
+                }
+            }
+        }
+    }
+
+    @Transactional
+    fun unregisterToken(apiKey: String, token: String) {
+        val member = memberRepository.findByNexonApiKey(apiKey)
+            ?: return // 유저가 없으면 이미 로그아웃된 것으로 간주
+
+        notificationTokenRepository.deleteByMemberAndToken(member, token)
+        log.info("토큰 삭제 완료: 유저=${member.id}, 토큰=${token.take(10)}...")
     }
 }

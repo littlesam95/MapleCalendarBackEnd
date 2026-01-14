@@ -1,6 +1,9 @@
 package com.sixclassguys.maplecalendar.domain.event.service
 
+import com.sixclassguys.maplecalendar.domain.event.dto.EventResponse
 import com.sixclassguys.maplecalendar.domain.event.entity.Event
+import com.sixclassguys.maplecalendar.domain.eventalarm.repository.EventAlarmRepository
+import com.sixclassguys.maplecalendar.domain.member.repository.MemberRepository
 import com.sixclassguys.maplecalendar.infrastructure.external.NexonApiClient
 import com.sixclassguys.maplecalendar.infrastructure.external.dto.EventNotice
 import com.sixclassguys.maplecalendar.infrastructure.persistence.event.EventRepository
@@ -16,26 +19,88 @@ import java.time.format.DateTimeFormatter
 @Service
 class EventService(
     private val nexonApiClient: NexonApiClient,
-    private val eventRepository: EventRepository
+    private val eventRepository: EventRepository,
+    private val memberRepository: MemberRepository,
+    private val eventAlarmRepository: EventAlarmRepository
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
     private val formatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME
 
-    fun getTodayEvents(year: Int, month: Int, day: Int): List<Event> {
-        val today = LocalDateTime.of(year, month, day, 0, 0)
+    private fun mapToResponses(events: List<Event>, apiKey: String?): List<EventResponse> {
+        if (events.isEmpty()) return emptyList()
 
-        return eventRepository.getEventsForToday(today)
+        // 1. API Key가 없거나 멤버가 없으면 알람 정보 없이 바로 반환
+        val member = apiKey?.let { memberRepository.findByNexonApiKey(it) }
+        if (member == null) {
+            return events.map { it.toDefaultResponse() }
+        }
+
+        val isGlobalEnabled = member.isGlobalAlarmEnabled
+
+        // 2. [핵심] 현재 조회된 이벤트 ID 리스트 추출
+        val eventIds = events.map { it.id }
+
+        // 3. [핵심] 단 한 번의 쿼리로 해당 유저의 모든 관련 알람 조회 (In-Query)
+        val alarms = eventAlarmRepository.findAllActiveByMemberAndEventIds(member, eventIds)
+
+        // 4. 빠른 조회를 위해 Map으로 변환 (EventID -> EventAlarm)
+        val alarmMap = alarms.associateBy { it.event.id }
+
+        // 5. 최종 데이터 조합
+        return events.map { event ->
+            val userAlarm = alarmMap[event.id]
+            val finalIsRegistered = if (!isGlobalEnabled) false else (userAlarm?.isEnabled ?: false)
+            EventResponse(
+                id = event.id,
+                title = event.title,
+                url = event.url,
+                thumbnailUrl = event.thumbnailUrl,
+                startDate = event.startDate.toString(),
+                endDate = event.endDate.toString(),
+                isRegistered = finalIsRegistered,
+                alarmTimes = if (!isGlobalEnabled) emptyList()
+                else userAlarm?.alarmTimes?.filter { !it.isSent }
+                    ?.map { it.alarmTime.toString() }
+                    ?.sorted() ?: emptyList(),
+            )
+        }
     }
 
-    fun getEventsByMonth(year: Int, month: Int): List<Event> {
+    // 기본 응답 변환을 위한 확장 함수
+    private fun Event.toDefaultResponse() = EventResponse(
+        id = id,
+        title = title,
+        url = url,
+        thumbnailUrl = thumbnailUrl,
+        startDate = startDate.toString(),
+        endDate = endDate.toString(),
+        isRegistered = false,
+        alarmTimes = emptyList()
+    )
+
+    fun getEventDetail(apiKey: String, eventId: Long): EventResponse? {
+        val event = eventRepository.findById(eventId).orElse(null)
+
+        return event?.let { mapToResponses(listOf(it), apiKey).firstOrNull() }
+    }
+
+    fun getTodayEvents(year: Int, month: Int, day: Int, apiKey: String?): List<EventResponse> {
+        val today = LocalDateTime.of(year, month, day, 0, 0)
+        val events = eventRepository.getEventsForToday(today)
+
+        return mapToResponses(events, apiKey)
+    }
+
+    fun getEventsByMonth(year: Int, month: Int, apiKey: String?): List<EventResponse> {
         val startOfMonth = LocalDateTime.of(year, month, 1, 0, 0)
         val endOfMonth = startOfMonth.plusMonths(1).minusNanos(1)
 
-        return eventRepository.findAllByStartDateLessThanEqualAndEndDateGreaterThanEqual(
-            endOfMonth,
-            startOfMonth
+        val events = eventRepository.findAllByStartDateLessThanEqualAndEndDateGreaterThanEqual(
+            endOfMonth, startOfMonth
         )
+
+        return mapToResponses(events, apiKey)
     }
 
     @Transactional
