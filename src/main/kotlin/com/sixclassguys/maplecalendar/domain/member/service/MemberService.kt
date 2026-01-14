@@ -19,8 +19,16 @@ class MemberService(
         // 2. 대표 캐릭터 OCID 업데이트
         // JPA의 변경 감지(Dirty Checking) 기능으로 인해 데이터를 변경하면 트랜잭션 종료 시 자동 저장
         member.representativeOcid = ocid
+    }
 
-        // (선택 사항) 로그 기록
-        // log.info("Member ${member.id} updated representative character to $ocid")
+    @Transactional
+    fun updateGlobalAlarmStatus(apiKey: String): Boolean {
+        val member = memberRepository.findByNexonApiKey(apiKey)
+            ?: throw Exception("User not found")
+
+        member.isGlobalAlarmEnabled = !member.isGlobalAlarmEnabled
+        // Dirty Checking으로 자동 저장
+
+        return member.isGlobalAlarmEnabled
     }
 }
