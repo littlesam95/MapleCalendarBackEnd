@@ -65,6 +65,8 @@ cd "$PROJECT_DIR"
 
 # Git에서 최신 코드 가져오기 (compose.yaml 등이 필요할 수 있음)
 echo -e "${YELLOW}[2/6] Git에서 최신 코드 가져오기...${NC}"
+# 파일 권한 변경을 무시하고 pull (chmod +x로 인한 충돌 방지)
+git config core.fileMode false
 git pull origin main || echo "Git pull 실패 또는 이미 최신 상태"
 
 # 기존 컨테이너 중지 및 제거

@@ -89,6 +89,8 @@ jobs:
             export AWS_ACCOUNT_ID=${AWS_ACCOUNT_ID}
             export IMAGE_TAG=${IMAGE_TAG}
             cd /home/ubuntu/MapleCalendarBackEnd
+            # 파일 권한 변경을 무시하고 pull (chmod +x로 인한 충돌 방지)
+            git config core.fileMode false
             git pull origin main
             chmod +x deploy.sh
             ./deploy.sh
