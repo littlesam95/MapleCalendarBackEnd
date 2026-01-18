@@ -31,7 +31,8 @@ class AuthService(
         // 2. 이미 대표 캐릭터가 설정된 경우, 바로 반환
         if (existingMember?.representativeOcid != null) {
             return@coroutineScope LoginResponse(
-                representativeOcid = existingMember.representativeOcid
+                representativeOcid = existingMember.representativeOcid,
+                isGlobalAlarmEnabled = existingMember.isGlobalAlarmEnabled
             )
         }
 
