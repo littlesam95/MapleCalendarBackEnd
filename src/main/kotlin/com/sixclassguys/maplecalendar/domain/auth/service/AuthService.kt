@@ -5,6 +5,8 @@ import com.sixclassguys.maplecalendar.domain.auth.dto.AutoLoginResponse
 import com.sixclassguys.maplecalendar.domain.auth.dto.LoginResponse
 import com.sixclassguys.maplecalendar.domain.member.entity.Member
 import com.sixclassguys.maplecalendar.domain.member.repository.MemberRepository
+import com.sixclassguys.maplecalendar.domain.notification.dto.TokenRequest
+import com.sixclassguys.maplecalendar.domain.notification.service.NotificationService
 import com.sixclassguys.maplecalendar.global.exception.InvalidApiKeyException
 import com.sixclassguys.maplecalendar.infrastructure.external.NexonApiClient
 import kotlinx.coroutines.coroutineScope
@@ -15,7 +17,8 @@ import org.springframework.transaction.annotation.Transactional
 @Service
 class AuthService(
     private val nexonApiClient: NexonApiClient,
-    private val memberRepository: MemberRepository
+    private val memberRepository: MemberRepository,
+    private val notificationService: NotificationService
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -28,7 +31,8 @@ class AuthService(
         // 2. 이미 대표 캐릭터가 설정된 경우, 바로 반환
         if (existingMember?.representativeOcid != null) {
             return@coroutineScope LoginResponse(
-                representativeOcid = existingMember.representativeOcid
+                representativeOcid = existingMember.representativeOcid,
+                isGlobalAlarmEnabled = existingMember.isGlobalAlarmEnabled
             )
         }
 
@@ -63,10 +67,21 @@ class AuthService(
         LoginResponse(characters = characters)
     }
 
-    fun processAutoLogin(apiKey: String): AutoLoginResponse {
+    fun processAutoLogin(apiKey: String, request: TokenRequest): AutoLoginResponse {
         // 1. DB에서 해당 API Key를 가진 유저 조회
         val user = memberRepository.findByNexonApiKey(apiKey)
             ?: return AutoLoginResponse(false, "존재하지 않는 회원입니다.")
+
+        try {
+            notificationService.registerToken(
+                request = TokenRequest(token = request.token, platform = request.platform),
+                memberId = user.id
+            )
+            log.info("유저(${user.id})의 FCM 토큰 업데이트 성공")
+        } catch (e: Exception) {
+            log.error("FCM 토큰 업데이트 실패: ${e.message}")
+            // 토큰 업데이트 실패가 로그인을 막으면 안 되므로 로그만 남깁니다.
+        }
 
         // 2. 대표 캐릭터 OCID가 설정되어 있는지 확인
         val ocid = user.representativeOcid
@@ -80,7 +95,8 @@ class AuthService(
             AutoLoginResponse(
                 isSuccess = true,
                 message = "자동 로그인 성공",
-                characterBasic = characterBasic
+                characterBasic = characterBasic,
+                isGlobalAlarmEnabled = user.isGlobalAlarmEnabled
             )
         } catch (e: Exception) {
             // 넥슨 API 키가 만료되었거나 서버 통신 오류 시

@@ -1,7 +1,10 @@
 package com.sixclassguys.maplecalendar.domain.event.entity
 
+import com.sixclassguys.maplecalendar.domain.eventalarm.entity.EventAlarm
+import jakarta.persistence.CascadeType
 import jakarta.persistence.Entity
 import jakarta.persistence.Id
+import jakarta.persistence.OneToMany
 import jakarta.persistence.Table
 import java.time.LocalDateTime
 
@@ -15,7 +18,11 @@ class Event(
     var thumbnailUrl: String?,
     var date: String,
     var startDate: LocalDateTime,
-    var endDate: LocalDateTime
+    var endDate: LocalDateTime,
+
+    // 💡 설정된 알람 시간들 (별도 테이블로 관리됨)
+    @OneToMany(mappedBy = "event", cascade = [CascadeType.ALL], orphanRemoval = true)
+    val registeredAlarms: MutableList<EventAlarm> = mutableListOf()
 ) {
 
     fun updateIfChanged(
