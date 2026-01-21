@@ -102,6 +102,7 @@ echo -e "${YELLOW}[6/6] 컨테이너 시작 중...${NC}"
 RESOURCES_DIR="$PROJECT_DIR/src/main/resources"
 docker run -d \
     --name "$CONTAINER_NAME" \
+    -e ENCRYPTION_KEY=$ENCRYPTION_KEY \
     --network host \
     -p 8080:8080 \
     --restart unless-stopped \

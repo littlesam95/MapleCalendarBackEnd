@@ -82,12 +82,14 @@ jobs:
           EC2_HOST: ${{ secrets.EC2_HOST }}
           EC2_USER: ${{ secrets.EC2_USER }}
           AWS_ACCOUNT_ID: ${{ steps.get-account-id.outputs.account_id }}
+          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
           IMAGE_TAG: latest
         run: |
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} << EOF
             set -e
             export AWS_ACCOUNT_ID=${AWS_ACCOUNT_ID}
             export IMAGE_TAG=${IMAGE_TAG}
+            export ENCRYPTION_KEY=${ENCRYPTION_KEY}
             cd /home/ubuntu/MapleCalendarBackEnd
             # 파일 권한 변경을 무시하고 pull (chmod +x로 인한 충돌 방지)
             git config core.fileMode false
