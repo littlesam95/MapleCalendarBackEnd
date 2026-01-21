@@ -7,6 +7,6 @@ import org.springframework.stereotype.Repository
 @Repository
 interface MemberRepository : JpaRepository<Member, Long> {
 
-    // API Key를 기반으로 유저를 조회하는 쿼리 메소드
-    fun findByNexonApiKey(nexonApiKey: String): Member?
+    // 이제 nexonApiKey 대신 해시값으로 찾습니다.
+    fun findByApiKeyHash(apiKeyHash: String): Member?
 }

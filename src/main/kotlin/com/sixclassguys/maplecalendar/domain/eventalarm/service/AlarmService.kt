@@ -5,7 +5,7 @@ import com.sixclassguys.maplecalendar.domain.eventalarm.dto.AlarmRequest
 import com.sixclassguys.maplecalendar.domain.eventalarm.entity.EventAlarm
 import com.sixclassguys.maplecalendar.domain.eventalarm.entity.EventAlarmTime
 import com.sixclassguys.maplecalendar.domain.eventalarm.repository.EventAlarmRepository
-import com.sixclassguys.maplecalendar.domain.member.repository.MemberRepository
+import com.sixclassguys.maplecalendar.domain.member.service.MemberService
 import com.sixclassguys.maplecalendar.infrastructure.persistence.event.EventRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -14,7 +14,7 @@ import java.time.LocalDateTime
 
 @Service
 class AlarmService(
-    private val memberRepository: MemberRepository,
+    private val memberService: MemberService,
     private val eventRepository: EventRepository,
     private val eventAlarmRepository: EventAlarmRepository
 ) {
@@ -23,8 +23,7 @@ class AlarmService(
 
     @Transactional
     fun saveOrUpdateAlarm(apiKey: String, request: AlarmRequest): EventResponse { // 💡 반환 타입 변경
-        val member = memberRepository.findByNexonApiKey(apiKey)
-            ?: throw Exception("User not found")
+        val member = memberService.getMemberByRawKey(apiKey)
         val event = eventRepository.findById(request.eventId)
             .orElseThrow { throw Exception("Event not found") }
 
@@ -74,7 +73,7 @@ class AlarmService(
 
     @Transactional
     fun toggleAlarmStatus(apiKey: String, eventId: Long): EventResponse {
-        val member = memberRepository.findByNexonApiKey(apiKey) ?: throw Exception("User not found")
+        val member = memberService.getMemberByRawKey(apiKey)
         val event = eventRepository.findById(eventId).orElseThrow { throw Exception("Event not found") }
 
         // 1. 기존 알람 설정을 찾거나, 없으면 새로 생성

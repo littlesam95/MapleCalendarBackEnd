@@ -7,6 +7,7 @@ import com.google.firebase.messaging.Notification
 import com.sixclassguys.maplecalendar.domain.eventalarm.entity.EventAlarm
 import com.sixclassguys.maplecalendar.domain.eventalarm.repository.EventAlarmRepository
 import com.sixclassguys.maplecalendar.domain.member.repository.MemberRepository
+import com.sixclassguys.maplecalendar.domain.member.service.MemberService
 import com.sixclassguys.maplecalendar.domain.notification.dto.TokenRequest
 import com.sixclassguys.maplecalendar.domain.notification.entity.NotificationToken
 import com.sixclassguys.maplecalendar.domain.notification.repository.NotificationTokenRepository
@@ -25,6 +26,7 @@ import java.time.temporal.ChronoUnit
 class NotificationService(
     private val notificationTokenRepository: NotificationTokenRepository,
     private val eventRepository: EventRepository,
+    private val memberService: MemberService,
     private val memberRepository: MemberRepository,
     private val eventAlarmRepository: EventAlarmRepository
 ) {
@@ -34,6 +36,9 @@ class NotificationService(
     private fun sendFcmMessage(alarmSetting: EventAlarm) {
         val member = alarmSetting.member
         val event = alarmSetting.event
+
+        val tokensFromDb = member.id?.let { notificationTokenRepository.findAllByMemberId(it) }
+        tokensFromDb?.let { log.info("📢 [검증] 유저 ID: ${member.id}, DB에 등록된 실제 토큰 개수: ${it.size}") }
 
         // 💡 남은 일수 계산
         val daysLeft = ChronoUnit.DAYS.between(LocalDate.now(), event.endDate.toLocalDate())
@@ -165,7 +170,7 @@ class NotificationService(
 
     @Transactional
     fun unregisterToken(apiKey: String, token: String) {
-        val member = memberRepository.findByNexonApiKey(apiKey)
+        val member = memberService.findByRawKey(apiKey)
             ?: return // 유저가 없으면 이미 로그아웃된 것으로 간주
 
         notificationTokenRepository.deleteByMemberAndToken(member, token)

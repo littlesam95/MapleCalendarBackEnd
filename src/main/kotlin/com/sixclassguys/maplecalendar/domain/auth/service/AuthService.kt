@@ -4,7 +4,7 @@ import com.sixclassguys.maplecalendar.domain.auth.dto.AccountCharacterResponse
 import com.sixclassguys.maplecalendar.domain.auth.dto.AutoLoginResponse
 import com.sixclassguys.maplecalendar.domain.auth.dto.LoginResponse
 import com.sixclassguys.maplecalendar.domain.member.entity.Member
-import com.sixclassguys.maplecalendar.domain.member.repository.MemberRepository
+import com.sixclassguys.maplecalendar.domain.member.service.MemberService
 import com.sixclassguys.maplecalendar.domain.notification.dto.TokenRequest
 import com.sixclassguys.maplecalendar.domain.notification.service.NotificationService
 import com.sixclassguys.maplecalendar.global.exception.InvalidApiKeyException
@@ -17,7 +17,7 @@ import org.springframework.transaction.annotation.Transactional
 @Service
 class AuthService(
     private val nexonApiClient: NexonApiClient,
-    private val memberRepository: MemberRepository,
+    private val memberService: MemberService,
     private val notificationService: NotificationService
 ) {
 
@@ -26,7 +26,7 @@ class AuthService(
     @Transactional
     suspend fun loginAndGetCharacters(apiKey: String): LoginResponse = coroutineScope {
         // 1. DB 먼저 확인 (이미 등록된 유저인지)
-        val existingMember = memberRepository.findByNexonApiKey(apiKey)
+        var existingMember = memberService.findByRawKey(apiKey)
 
         // 2. 이미 대표 캐릭터가 설정된 경우, 바로 반환
         if (existingMember?.representativeOcid != null) {
@@ -47,7 +47,7 @@ class AuthService(
         // 5. Member 엔티티 저장 또는 조회 (Upsert 로직)
         // API Key를 고유 식별자로 사용하여 유저 관리
         if (existingMember == null) {
-            memberRepository.save(Member(nexonApiKey = apiKey))
+            existingMember = memberService.saveNewMember(apiKey)
         }
 
         // 6. 모든 계정의 캐릭터를 평면화
@@ -69,7 +69,7 @@ class AuthService(
 
     fun processAutoLogin(apiKey: String, request: TokenRequest): AutoLoginResponse {
         // 1. DB에서 해당 API Key를 가진 유저 조회
-        val user = memberRepository.findByNexonApiKey(apiKey)
+        val user = memberService.findByRawKey(apiKey)
             ?: return AutoLoginResponse(false, "존재하지 않는 회원입니다.")
 
         try {
@@ -92,10 +92,21 @@ class AuthService(
             val characterBasic = nexonApiClient.getCharacterBasic(apiKey, ocid)
             log.info("캐릭터 정보: $characterBasic")
 
+            val customImage = characterBasic?.let {
+                if (it.characterImage != null) {
+                    val baseUrl = characterBasic.characterImage
+                    // 쿼리 스트링 조합
+                    // 예: baseUrl?action=stand1&emotion=default&wmotion=default
+                    "$baseUrl?action=${user.charAction}&emotion=${user.charEmotion}&wmotion=${user.charWeaponMotion}"
+                } else {
+                    null
+                }
+            }
+
             AutoLoginResponse(
                 isSuccess = true,
                 message = "자동 로그인 성공",
-                characterBasic = characterBasic,
+                characterBasic = characterBasic?.copy(characterImage = customImage),
                 isGlobalAlarmEnabled = user.isGlobalAlarmEnabled
             )
         } catch (e: Exception) {
