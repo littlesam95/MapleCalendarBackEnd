@@ -4,6 +4,7 @@ import com.sixclassguys.maplecalendar.global.config.NexonProperties
 import com.sixclassguys.maplecalendar.infrastructure.external.dto.Account
 import com.sixclassguys.maplecalendar.infrastructure.external.dto.AccountResponse
 import com.sixclassguys.maplecalendar.infrastructure.external.dto.CharacterBasic
+import com.sixclassguys.maplecalendar.infrastructure.external.dto.DojangRanking
 import com.sixclassguys.maplecalendar.infrastructure.external.dto.DojangResponse
 import com.sixclassguys.maplecalendar.infrastructure.external.dto.EventNotice
 import com.sixclassguys.maplecalendar.infrastructure.external.dto.EventNoticeResponse
@@ -162,12 +163,10 @@ class NexonApiClient(
         return response.body
     }
 
-    fun getDojangInfo(apiKey: String, ocid: String, date: LocalDate): DojangResponse? {
-        val url = "${nexonProperties.baseUrl}/ranking/dojang"
+    fun getDojangInfo(apiKey: String, ocid: String): DojangRanking? {
+        val url = "${nexonProperties.baseUrl}/character/dojang"
         val uri = UriComponentsBuilder.fromUriString(url)
             .queryParam("ocid", ocid)
-            .queryParam("date", date.toString())
-            .queryParam("difficulty", 0)
             .build()
             .toUri()
 
@@ -180,32 +179,9 @@ class NexonApiClient(
             uri,
             HttpMethod.GET,
             entity,
-            DojangResponse::class.java
+            DojangRanking::class.java
         )
 
         return response.body
     }
-
-//    fun getPopularity(apiKey: String, ocid: String): PopularityResponse? {
-//        val url = "${nexonProperties.baseUrl}/character/popularity"
-//        val uri = UriComponentsBuilder.fromUriString(url)
-//            .queryParam("ocid", ocid)
-//            .build()
-//            .toUri()
-//
-//        val headers = HttpHeaders().apply {
-//            set("x-nxopen-api-key", apiKey)
-//        }
-//        val entity = HttpEntity<Unit>(headers)
-//
-//        val response = restTemplate.exchange(
-//            uri,
-//            HttpMethod.GET,
-//            entity,
-//            PopularityResponse::class.java
-//        )
-//
-//        return response.body
-//    }
-
 }

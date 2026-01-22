@@ -3,30 +3,23 @@ package com.sixclassguys.maplecalendar.infrastructure.external.dto
 import com.fasterxml.jackson.annotation.JsonProperty
 
 data class DojangRanking(
+
+
     @JsonProperty("date")
     val date: String?,
 
-    @JsonProperty("ranking")
-    val rank: Int?,
-
-    @JsonProperty("character_name")
-    val characterName: String?,
+    @JsonProperty("character_class")
+    val characterClass: String?,
 
     @JsonProperty("world_name")
     val worldName: String?,
 
-    @JsonProperty("class_name")
-    val className: String?,
+    @JsonProperty("dojang_best_floor")
+    val dojangBestFloor: String?,
 
-    @JsonProperty("sub_class_name")
-    val subClassName: String?,
+    @JsonProperty("date_dojang_record")
+    val dateDojangRecord: String?,
 
-    @JsonProperty("character_level")
-    val characterLevel: Int?,
-
-    @JsonProperty("dojang_floor")
-    val dojangFloor: Int?,
-
-    @JsonProperty("dojang_time_record")
-    val dojangTimeRecord: Int
+    @JsonProperty("dojang_best_time")
+    val dojangBestTime: String?,
 )

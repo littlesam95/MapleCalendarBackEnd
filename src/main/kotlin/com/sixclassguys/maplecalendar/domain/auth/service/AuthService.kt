@@ -9,10 +9,15 @@ import com.sixclassguys.maplecalendar.domain.notification.dto.TokenRequest
 import com.sixclassguys.maplecalendar.domain.notification.service.NotificationService
 import com.sixclassguys.maplecalendar.global.exception.InvalidApiKeyException
 import com.sixclassguys.maplecalendar.infrastructure.external.NexonApiClient
+import com.sixclassguys.maplecalendar.infrastructure.external.dto.DojangRanking
+import com.sixclassguys.maplecalendar.infrastructure.external.dto.Ranking
+import com.sixclassguys.maplecalendar.infrastructure.external.dto.UnionResponse
 import kotlinx.coroutines.coroutineScope
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.LocalDate
+import java.time.ZoneId
 
 @Service
 class AuthService(
@@ -90,6 +95,17 @@ class AuthService(
         return try {
             // 3. 넥슨 API를 통해 해당 OCID의 최신 정보 조회 (이미지, 레벨 등)
             val characterBasic = nexonApiClient.getCharacterBasic(apiKey, ocid)
+
+            val todayKst = LocalDate.now(ZoneId.of("Asia/Seoul"))
+
+            val overAllRanking = nexonApiClient.getOverAllRanking(apiKey, ocid, todayKst)
+            val worldName = overAllRanking?.ranking[0]?.worldName
+            val serverRanking = worldName?.let {
+                nexonApiClient.getServerRanking(apiKey, ocid, todayKst, it)
+            }
+            val union = nexonApiClient.getUnionInfo(apiKey, ocid)
+            val dojang = nexonApiClient.getDojangInfo(apiKey, ocid)
+
             log.info("캐릭터 정보: $characterBasic")
 
             val customImage = characterBasic?.let {
@@ -107,7 +123,12 @@ class AuthService(
                 isSuccess = true,
                 message = "자동 로그인 성공",
                 characterBasic = characterBasic?.copy(characterImage = customImage),
-                isGlobalAlarmEnabled = user.isGlobalAlarmEnabled
+                isGlobalAlarmEnabled = user.isGlobalAlarmEnabled,
+                characterPopularity = overAllRanking?.ranking[0]?.characterPopularity,
+                characterOverallRanking = overAllRanking?.ranking[0],
+                characterServerRanking = serverRanking?.ranking[0],
+                characterUnionLevel = union,
+                characterDojang = dojang
             )
         } catch (e: Exception) {
             // 넥슨 API 키가 만료되었거나 서버 통신 오류 시
