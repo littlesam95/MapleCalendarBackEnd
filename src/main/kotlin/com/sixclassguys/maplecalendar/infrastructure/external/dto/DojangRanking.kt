@@ -21,5 +21,5 @@ data class DojangRanking(
     val dateDojangRecord: String?,
 
     @JsonProperty("dojang_best_time")
-    val dojangBestTime: String?,
+    val dojangBestTime: Long?,
 )
