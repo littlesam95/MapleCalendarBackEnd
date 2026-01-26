@@ -21,6 +21,7 @@ class SecurityConfig(
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .authorizeHttpRequests {
                 it.requestMatchers(
+                    "/api/events/today",
                     "/api/auth/**",
                 ).permitAll()
                 it.requestMatchers(

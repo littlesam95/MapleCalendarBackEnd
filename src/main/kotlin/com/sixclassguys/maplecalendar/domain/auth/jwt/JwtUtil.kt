@@ -21,6 +21,7 @@ class JwtUtil(@Value("\${jwt.secret}") private val secretKey: String) {
 
     fun createAccessToken(username: String): String =
         Jwts.builder()
+            .setHeaderParam("typ", "JWT") // 헤더에 타입 명시
             .setSubject(username)
             .claim("type", "access")
             .setIssuedAt(Date())
