@@ -11,9 +11,12 @@ import java.time.LocalDateTime
 data class LoginResponse(
     val id: Long,
     val email: String,
+    val nickname: String?,
+    val profileImageUrl: String?,
     val provider: String,
     val isGlobalAlarmEnabled: Boolean,
     val accessToken: String,
+    val isNewMember: Boolean,
     val characterBasic: CharacterBasic? = null,
     val characterPopularity: Int? = null,
     val characterOverallRanking: Ranking? = null,
@@ -32,16 +35,19 @@ data class LoginResponse(
         fun fromEntity(
             member: Member,
             character: MapleCharacter? = null,
-            token: String? = null
+            token: String? = null,
+            isNewMember: Boolean = false
         ): LoginResponse {
             return LoginResponse(
                 id = member.id!!,
                 email = member.email,
+                nickname = member.nickname,
+                profileImageUrl = member.profileImageUrl,
                 provider = member.provider,
                 isGlobalAlarmEnabled = member.isGlobalAlarmEnabled,
                 accessToken = token ?: "",
+                isNewMember = isNewMember,
                 lastLoginAt = member.lastLoginAt,
-
                 // API 호출 실패 시 우리 DB에 있는 정보라도 최대한 넣어줌
                 characterBasic = character?.let {
                     CharacterBasic(

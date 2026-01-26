@@ -30,6 +30,12 @@ class Member(
     @Column(name = "email", unique = true, nullable = false)
     var email: String,
 
+    @Column(name = "nickname")
+    var nickname: String? = null,
+
+    @Column(name = "profileImageUrl")
+    var profileImageUrl: String? = null,
+
     @Column(name = "is_global_alarm_enabled", nullable = false)
     var isGlobalAlarmEnabled: Boolean = false,
 

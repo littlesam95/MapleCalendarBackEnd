@@ -3,10 +3,9 @@ package com.sixclassguys.maplecalendar.domain.auth.service
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier
 import com.google.api.client.http.javanet.NetHttpTransport
 import com.google.api.client.json.gson.GsonFactory
+import com.sixclassguys.maplecalendar.domain.auth.dto.AuthResult
 import com.sixclassguys.maplecalendar.domain.auth.dto.LoginResponse
-import com.sixclassguys.maplecalendar.domain.auth.entity.RefreshToken
 import com.sixclassguys.maplecalendar.domain.auth.jwt.JwtUtil
-import com.sixclassguys.maplecalendar.domain.auth.repository.RefreshTokenRepository
 import com.sixclassguys.maplecalendar.domain.character.service.MapleCharacterService
 import com.sixclassguys.maplecalendar.domain.member.entity.Member
 import com.sixclassguys.maplecalendar.domain.member.repository.MemberRepository
@@ -25,11 +24,11 @@ import java.time.LocalDateTime
 @Service
 class AuthService(
     private val nexonApiClient: NexonApiClient,
+    private val memberService: MemberService,
     private val memberRepository: MemberRepository,
     private val mapleCharacterService: MapleCharacterService,
-    private val notificationService: NotificationService,
     private val jwtUtil: JwtUtil,
-    private val refreshTokenRepository: RefreshTokenRepository,
+    private val notificationService: NotificationService,
     private val googleOAuthProperties: GoogleOAuthProperties
 ) {
 
@@ -156,9 +155,19 @@ class AuthService(
         val payload = googleIdToken.payload
         val googleUid = payload.subject // Google의 subject(providerId)
         val email = payload.email
+        val name = payload["name"] as? String // 유저 전체 이름
+        val pictureUrl = payload["picture"] as? String // 프로필 사진 URL
+        log.info("이메일: ${email}, 닉네임: ${name}, 프사: ${pictureUrl}")
 
         // 유저 조회, 없으면 가입
-        val user = loginOrRegister(provider = "google", providerId = googleUid, email = email)
+        val authResult = loginOrRegister(
+            provider = "google",
+            providerId = googleUid,
+            email = email,
+            nickname = name,
+            profileImageUrl = pictureUrl
+        )
+        val user = authResult.member
 
         // 비동기로 보유한 모든 API Key로 캐릭터 목록을 조회 및 갱신
         mapleCharacterService.refreshUserCharacters(user)
@@ -174,18 +183,13 @@ class AuthService(
             log.error("FCM 토큰 업데이트 실패: ${e.message}")
         }
 
-        // JWT 발급
         val accessToken = jwtUtil.createAccessToken(user.email)
         val refreshToken = jwtUtil.createRefreshToken(user.email)
 
-        // RefreshToken DB 저장 (1:N)
-        val tokenEntity = RefreshToken(token = refreshToken, member = user)
-        refreshTokenRepository.save(tokenEntity)
-
         // 대표 캐릭터 정보 조회, 대표 캐릭터 OCID가 없으면 기본 프로필 정보만 담은 Response 반환
-        val ocid = user.representativeOcid ?: return LoginResponse.fromEntity(user, null, accessToken) to refreshToken
+        val ocid = user.representativeOcid ?: return LoginResponse.fromEntity(user, null, accessToken, authResult.isNewMember)  to refreshToken
 
-        val loginResponse = if (ocid != null){
+        val loginResponse = if (ocid != null) {
             try {
                 // 5. 넥슨 API를 통해 최신 캐릭터 정보 수집
                 val characterBasic = nexonApiClient.getCharacterBasic(ocid)
@@ -203,8 +207,11 @@ class AuthService(
                     id = user.id!!,
                     email = user.email,
                     provider = user.provider,
+                    nickname = name,
+                    profileImageUrl = pictureUrl,
                     isGlobalAlarmEnabled = user.isGlobalAlarmEnabled,
-                    accessToken = accessToken, // 여기서 JWT를 새로 발급
+                    accessToken = accessToken,
+                    isNewMember = authResult.isNewMember,
                     characterBasic = characterBasic,
                     characterPopularity = overAllRanking?.ranking?.getOrNull(0)?.characterPopularity,
                     characterOverallRanking = overAllRanking?.ranking[0],
@@ -218,7 +225,7 @@ class AuthService(
                 log.warn("캐릭터 정보 로딩 실패: ${e.message}")
                 LoginResponse.fromEntity(user, null)
             }
-        }else {
+        } else {
             // 대표 캐릭터가 없는 경우 기본 정보만
             LoginResponse.fromEntity(user, null, accessToken)
         }
@@ -227,14 +234,21 @@ class AuthService(
     }
 
     @Transactional
-    fun loginWithApple(appleSub: String, email: String): Member {
+    fun loginWithApple(appleSub: String, email: String): AuthResult {
         // Apple 로그인은 ID 토큰 검증은 필요하지만 여기선 sub와 이메일만 사용
-        return loginOrRegister(provider = "apple", providerId = appleSub, email = email)
+        return loginOrRegister(provider = "apple", providerId = appleSub, email = email, null, null)
     }
 
-    private fun loginOrRegister(provider: String, providerId: String, email: String): Member {
+    private fun loginOrRegister(
+        provider: String,
+        providerId: String,
+        email: String,
+        nickname: String?,
+        profileImageUrl: String?
+    ): AuthResult {
         var member = memberRepository.findByProviderAndProviderId(provider, providerId)
-        if (member == null) {
+
+        return if (member == null) {
             // 이메일 중복 체크
             val existing = memberRepository.findByEmail(email)
             if (existing != null) {
@@ -245,16 +259,21 @@ class AuthService(
                 provider = provider,
                 providerId = providerId,
                 email = email,
+                nickname = nickname,
+                profileImageUrl = profileImageUrl,
                 lastLoginAt = LocalDateTime.now()
             )
             log.info("Member: $member")
             memberRepository.save(member)
+            AuthResult(memberRepository.save(member), true)
         } else {
             // 기존 회원이면 lastLoginAt 업데이트
+            member.nickname = nickname ?: member.nickname
+            member.profileImageUrl = profileImageUrl ?: member.profileImageUrl
             member.lastLoginAt = LocalDateTime.now()
             member.updatedAt = LocalDateTime.now()
             memberRepository.save(member)
+            AuthResult(memberRepository.save(member), false)
         }
-        return member
     }
 }

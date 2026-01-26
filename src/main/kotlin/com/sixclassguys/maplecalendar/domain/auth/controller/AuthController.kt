@@ -1,6 +1,7 @@
 package com.sixclassguys.maplecalendar.domain.auth.controller
 
 import com.sixclassguys.maplecalendar.domain.auth.dto.AuthGoogleRequest
+import com.sixclassguys.maplecalendar.domain.auth.dto.AuthResult
 import com.sixclassguys.maplecalendar.domain.auth.dto.LoginResponse
 import com.sixclassguys.maplecalendar.domain.auth.service.AuthService
 import com.sixclassguys.maplecalendar.domain.member.entity.Member
@@ -72,7 +73,7 @@ class AuthController(
 
 
     @PostMapping("/apple")
-    fun appleLogin(@RequestBody request: AppleLoginRequest): ResponseEntity<Member> {
+    fun appleLogin(@RequestBody request: AppleLoginRequest): ResponseEntity<AuthResult> {
         val member = authService.loginWithApple(request.sub, request.email)
         return ResponseEntity.ok(member)
     }
