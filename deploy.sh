@@ -105,6 +105,7 @@ docker run -d \
     -e ENCRYPTION_KEY=$ENCRYPTION_KEY \
     -e GOOGLE_OAUTH_CLIENT_IDS_0=$GOOGLE_OAUTH_CLIENT_IDS_0 \
     -e GOOGLE_OAUTH_CLIENT_IDS_1=$GOOGLE_OAUTH_CLIENT_IDS_1 \
+    -e JWT_SECRET=$JWT_SECRET \ 
     -e TZ=Asia/Seoul \
     -v /etc/localtime:/etc/localtime:ro \
     --network host \
