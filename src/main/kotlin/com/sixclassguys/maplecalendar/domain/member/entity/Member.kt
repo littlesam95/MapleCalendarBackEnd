@@ -51,6 +51,9 @@ class Member(
     @Column(name = "updated_at", nullable = false)
     var updatedAt: LocalDateTime = LocalDateTime.now(),
 
+    @Column(name = "background_image_url", length = 500)
+    var backgroundImageUrl: String? = null,
+
     @OneToMany(mappedBy = "member", cascade = [CascadeType.ALL])
     val tokens: MutableList<NotificationToken> = mutableListOf(),
 
