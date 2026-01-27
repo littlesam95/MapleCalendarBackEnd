@@ -16,7 +16,7 @@ class JwtUtil(@Value("\${jwt.secret}") private val secretKey: String) {
         secretKey.toByteArray()
     )
 
-    private val ACCESS_EXP = 1000 * 60 * 15      // 15분
+    private val ACCESS_EXP = 1000 * 60 * 60 * 24      // 15분
     private val REFRESH_EXP = 1000 * 60 * 60 * 24 * 7 // 7일
 
     fun createAccessToken(username: String): String =

@@ -8,21 +8,35 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.http.SessionCreationPolicy
 import org.springframework.security.web.SecurityFilterChain
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter
+import org.springframework.security.web.firewall.HttpFirewall
+import org.springframework.security.web.firewall.StrictHttpFirewall
 
 @Configuration
 @EnableWebSecurity
 class SecurityConfig(
     private val jwtAuthenticationFilter: JwtAuthenticationFilter
 ) {
+
+    @Bean
+    fun strictHttpFirewall(): HttpFirewall {
+        val firewall = StrictHttpFirewall()
+        firewall.setAllowSemicolon(true) // 세미콜론 허용
+        firewall.setAllowUrlEncodedSlash(true) // 인코딩된 슬래시 허용
+        firewall.setAllowBackSlash(true)
+        return firewall
+    }
+
     @Bean
     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
-        http
+        http.httpBasic { it.disable() }
+            .formLogin { it.disable() }
             .csrf { it.disable() }
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .authorizeHttpRequests {
                 it.requestMatchers(
                     "/api/events/today",
                     "/api/auth/**",
+                    "/api/character/**"
                 ).permitAll()
                 it.requestMatchers(
                     "/v2/api-docs",
