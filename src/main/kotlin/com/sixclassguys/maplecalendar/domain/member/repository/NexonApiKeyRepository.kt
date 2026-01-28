@@ -8,4 +8,6 @@ import org.springframework.stereotype.Repository
 interface NexonApiKeyRepository : JpaRepository<NexonApiKey, Long> {
 
     fun findByApiKeyHash(apiKeyHash: String): NexonApiKey?
+
+    fun existsByApiKeyHash(apiKeyHash: String): Boolean
 }

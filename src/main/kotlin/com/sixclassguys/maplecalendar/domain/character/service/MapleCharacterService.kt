@@ -6,8 +6,11 @@ import com.sixclassguys.maplecalendar.domain.character.dto.MapleCharacterListRes
 import com.sixclassguys.maplecalendar.domain.character.entity.MapleCharacter
 import com.sixclassguys.maplecalendar.domain.character.repository.MapleCharacterRepository
 import com.sixclassguys.maplecalendar.domain.member.entity.Member
+import com.sixclassguys.maplecalendar.domain.member.entity.NexonApiKey
 import com.sixclassguys.maplecalendar.domain.member.repository.MemberRepository
+import com.sixclassguys.maplecalendar.domain.member.repository.NexonApiKeyRepository
 import com.sixclassguys.maplecalendar.domain.util.MapleWorld
+import com.sixclassguys.maplecalendar.global.config.EncryptionUtil
 import com.sixclassguys.maplecalendar.global.exception.AccessDeniedException
 import com.sixclassguys.maplecalendar.global.exception.InvalidApiKeyException
 import com.sixclassguys.maplecalendar.infrastructure.external.NexonApiClient
@@ -29,7 +32,9 @@ import java.time.OffsetDateTime
 @Service
 class MapleCharacterService(
     private val mapleCharacterRepository: MapleCharacterRepository,
+    private val nexonApiKeyRepository: NexonApiKeyRepository,
     private val memberRepository: MemberRepository,
+    private val encryptionUtil: EncryptionUtil,
     private val nexonApiClient: NexonApiClient
 ) {
 
@@ -65,11 +70,27 @@ class MapleCharacterService(
 
     // 2. 넥슨 API 캐릭터 페치 로직 수정
     suspend fun fetchCharactersFromNexon(email: String, apiKey: String): MapleCharacterListResponse = coroutineScope {
-        memberRepository.findByEmail(email)
+        val member = memberRepository.findByEmail(email)
             ?: throw EntityNotFoundException("유저를 찾을 수 없습니다.")
 
         val nexonAccounts = nexonApiClient.getCharacters(apiKey)
         if (nexonAccounts.isEmpty()) throw InvalidApiKeyException()
+
+        // 2. 🚀 유효한 키라면 DB 저장 (중복 체크 포함)
+        val apiKeyHash = encryptionUtil.hashKey(apiKey)
+
+        // 이 멤버가 이미 이 키를 등록했는지 확인 (또는 전체 유니크 체크)
+        val isKeyExists = nexonApiKeyRepository.existsByApiKeyHash(apiKeyHash)
+
+        if (!isKeyExists) {
+            nexonApiKeyRepository.save(
+                NexonApiKey(
+                    member = member,
+                    nexonApiKey = apiKey, // Converter에 의해 자동 암호화됨
+                    apiKeyHash = apiKeyHash
+                )
+            )
+        }
 
         val groupedByWorld = nexonAccounts.flatMap { it.characters }
             .mapNotNull { nexonChar ->
