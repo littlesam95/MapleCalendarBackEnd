@@ -36,7 +36,8 @@ class SecurityConfig(
                 it.requestMatchers(
                     "/api/events/today",
                     "/api/auth/**",
-                    "/api/character/**"
+                    "/api/character/**",
+                    "/api/test/s3/**"
                 ).permitAll()
                 it.requestMatchers(
                     "/v2/api-docs",

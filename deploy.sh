@@ -106,6 +106,9 @@ docker run -d \
     -e GOOGLE_OAUTH_CLIENT_IDS_0=$GOOGLE_OAUTH_CLIENT_IDS_0 \
     -e GOOGLE_OAUTH_CLIENT_IDS_1=$GOOGLE_OAUTH_CLIENT_IDS_1 \
     -e JWT_SECRET=$JWT_SECRET \
+    -e AWS_ACCESS_KEY=$AWS_ACCESS_KEY \
+    -e AWS_SECRET_KEY=$AWS_SECRET_KEY \
+    -e S3_BUCKET_NAME=$S3_BUCKET_NAME \
     -e TZ=Asia/Seoul \
     -v /etc/localtime:/etc/localtime:ro \
     --network host \

@@ -87,6 +87,9 @@ jobs:
           GOOGLE_OAUTH_CLIENT_IDS_1: ${{ secrets.GOOGLE_CLIENT_ID_ANDROID }}
           IMAGE_TAG: latest
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
+          AWS_SECRET_KEY: ${{ secrets.AWS_SECRET_KEY }}
+          S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
         run: |
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} << EOF
             set -e
@@ -96,6 +99,9 @@ jobs:
             export GOOGLE_OAUTH_CLIENT_IDS_0=${GOOGLE_OAUTH_CLIENT_IDS_0}
             export GOOGLE_OAUTH_CLIENT_IDS_1=${GOOGLE_OAUTH_CLIENT_IDS_1}
             export JWT_SECRET=${JWT_SECRET}
+            export AWS_ACCESS_KEY=${AWS_ACCESS_KEY}
+            export AWS_SECRET_KEY=${AWS_SECRET_KEY}
+            export S3_BUCKET_NAME=${S3_BUCKET_NAME}
             cd /home/ubuntu/MapleCalendarBackEnd
             # 파일 권한 변경을 무시하고 pull (chmod +x로 인한 충돌 방지)
             git config core.fileMode false
