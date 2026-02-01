@@ -6,5 +6,6 @@ enum class BossPartyChatMessageType {
     LEAVE,
     TEXT,
     IMAGE,
-    BOTH
+    BOTH,
+    DELETED
 }
