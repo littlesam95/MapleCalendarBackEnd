@@ -15,12 +15,6 @@ class BossPartyMember(
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     val id: Long = 0,
 
-//    @Column(name = "boss_party_id", nullable = false)
-//    val bossPartyId: Long,
-//
-//    @Column(name = "character_id", nullable = false)
-//    val characterId: Long,
-
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "boss_party_id", nullable = false)
     val bossParty: BossParty,
