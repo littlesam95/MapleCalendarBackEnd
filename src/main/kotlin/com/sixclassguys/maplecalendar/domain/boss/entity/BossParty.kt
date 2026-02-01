@@ -25,6 +25,9 @@ class BossParty(
     @Column(name = "difficulty", nullable = false)
     var difficulty: BossDifficulty,
 
+    @OneToMany(mappedBy = "bossParty", fetch = FetchType.LAZY)
+    val members: List<BossPartyMember> = emptyList(),
+
     @Column(name = "created_at")
     var createdAt: LocalDateTime = LocalDateTime.now(),
 

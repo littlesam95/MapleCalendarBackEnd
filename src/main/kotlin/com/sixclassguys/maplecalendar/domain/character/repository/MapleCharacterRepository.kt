@@ -3,6 +3,7 @@ package com.sixclassguys.maplecalendar.domain.character.repository
 import com.sixclassguys.maplecalendar.domain.character.entity.MapleCharacter
 import com.sixclassguys.maplecalendar.domain.member.entity.Member
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Query
 import org.springframework.stereotype.Repository
 
 @Repository
@@ -27,4 +28,8 @@ interface MapleCharacterRepository : JpaRepository<MapleCharacter, Long> {
     fun existsByMemberAndOcid(member: Member, ocid: String): Boolean
 
     fun findByOcidAndMember(ocid: String, member: Member): MapleCharacter?
+
+    // 유저의 이메일로 현재 활성화된(isActive) 캐릭터 하나를 찾는 쿼리
+    @Query("select c from MapleCharacter c where c.member.email = :email and c.isActive = true")
+    fun findFirstByMemberEmailAndIsActiveTrue(email: String): MapleCharacter?
 }

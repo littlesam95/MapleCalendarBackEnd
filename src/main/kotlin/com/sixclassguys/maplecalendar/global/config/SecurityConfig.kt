@@ -39,6 +39,7 @@ class SecurityConfig(
                     "/api/character/**",
                     "/api/boss-parties/**",
                     "/api/test/s3/**",
+                    "/ws-chat/**"
                 ).permitAll()
                 it.requestMatchers(
                     "/v2/api-docs",

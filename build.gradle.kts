@@ -66,6 +66,12 @@ dependencies {
 
     // AWS S3
     implementation("io.awspring.cloud:spring-cloud-starter-aws:2.4.4")
+
+    // WebSocket
+    implementation("org.springframework.boot:spring-boot-starter-websocket")
+
+    // JSON 직렬화/역직렬화 (일반적으로 spring-boot-starter-web에 포함됨)
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
 }
 
 kotlin {
