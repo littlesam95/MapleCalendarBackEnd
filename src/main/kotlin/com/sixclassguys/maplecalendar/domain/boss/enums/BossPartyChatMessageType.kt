@@ -1,4 +1,4 @@
-package com.sixclassguys.maplecalendar.domain.util
+package com.sixclassguys.maplecalendar.domain.boss.enums
 
 enum class BossPartyChatMessageType {
 

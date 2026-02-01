@@ -11,7 +11,7 @@ import com.sixclassguys.maplecalendar.domain.boss.repository.BossPartyChatMessag
 import com.sixclassguys.maplecalendar.domain.boss.repository.BossPartyMemberRepository
 import com.sixclassguys.maplecalendar.domain.boss.repository.BossPartyRepository
 import com.sixclassguys.maplecalendar.domain.character.repository.MapleCharacterRepository
-import com.sixclassguys.maplecalendar.domain.util.BossPartyChatMessageType
+import com.sixclassguys.maplecalendar.domain.boss.enums.BossPartyChatMessageType
 import com.sixclassguys.maplecalendar.global.exception.BossPartyChatMessageNotFoundException
 import com.sixclassguys.maplecalendar.global.exception.BossPartyNotFoundException
 import com.sixclassguys.maplecalendar.global.exception.DeleteBossPartyChatMessageDeniedException

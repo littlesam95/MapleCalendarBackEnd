@@ -1,7 +1,7 @@
 package com.sixclassguys.maplecalendar.domain.boss.dto
 
 import com.sixclassguys.maplecalendar.domain.boss.entity.BossPartyChatMessage
-import com.sixclassguys.maplecalendar.domain.util.BossPartyChatMessageType
+import com.sixclassguys.maplecalendar.domain.boss.enums.BossPartyChatMessageType
 
 data class BossPartyChatMessageResponse(
     val id: Long,

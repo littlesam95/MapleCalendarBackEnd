@@ -1,7 +1,7 @@
 package com.sixclassguys.maplecalendar.domain.boss.entity
 
 import com.sixclassguys.maplecalendar.domain.character.entity.MapleCharacter
-import com.sixclassguys.maplecalendar.domain.util.BossPartyChatMessageType
+import com.sixclassguys.maplecalendar.domain.boss.enums.BossPartyChatMessageType
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.EnumType
