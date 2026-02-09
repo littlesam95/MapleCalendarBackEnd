@@ -120,12 +120,11 @@ docker run -d \
     -e S3_BUCKET_NAME=$S3_BUCKET_NAME \
     -e TZ=Asia/Seoul \
     -v /etc/localtime:/etc/localtime:ro \
+    -e JAVA_OPTS="-Dspring.rabbitmq.host=host.docker.internal -Dredis.host=host.docker.internal -Dspring.rabbitmq.port=5672 -Dredis.port=6379" \
     -p 8080:8080 \
     --restart unless-stopped \
     -v "$RESOURCES_DIR:/app/resources:ro" \
-    "$APP_NAME:latest" \
-    --spring.rabbitmq.host=host.docker.internal \
-    --redis.host=host.docker.internal
+    "$APP_NAME:latest"
 
 # 컨테이너 상태 확인
 sleep 5
