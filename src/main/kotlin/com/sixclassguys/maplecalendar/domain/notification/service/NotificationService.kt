@@ -32,8 +32,7 @@ class NotificationService(
     private val bossPartyAlarmTimeRepository: BossPartyAlarmTimeRepository,
     private val eventRepository: EventRepository,
     private val memberRepository: MemberRepository,
-    private val eventAlarmRepository: EventAlarmRepository,
-    private val firebaseMessaging: FirebaseMessaging
+    private val eventAlarmRepository: EventAlarmRepository
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -91,7 +90,7 @@ class NotificationService(
                 .build()
 
             try {
-                firebaseMessaging.send(message)
+                FirebaseMessaging.getInstance().send(message)
                 log.info("🚀 FCM 발송 성공: 유저=${member.id}, 제목=${alarm.title}")
             } catch (e: Exception) {
                 log.error("❌ FCM 발송 실패: 토큰=${tokenEntity.token.take(10)}..., 사유=${e.message}")
