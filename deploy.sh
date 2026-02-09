@@ -120,7 +120,6 @@ docker run -d \
     -e S3_BUCKET_NAME=$S3_BUCKET_NAME \
     -e TZ=Asia/Seoul \
     -v /etc/localtime:/etc/localtime:ro \
-    --network host \
     -p 8080:8080 \
     --restart unless-stopped \
     -v "$RESOURCES_DIR:/app/resources:ro" \
