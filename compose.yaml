@@ -17,12 +17,14 @@ services:
     command: redis-server --appendonly yes --requirepass "sixclassguys"
     restart: always
   rabbitmq:
-    image: cycling9/rabbitmq-delayed-message-exchange:3.12-management
+    build:
+      context: .
+      dockerfile: Dockerfile-rabbitmq
     container_name: rabbitmq
     restart: always
     ports:
       - "5672:5672"
-      - "15672:15672" # 관리자 대시보드
+      - "15672:15672"
     environment:
       - RABBITMQ_DEFAULT_USER=guest
       - RABBITMQ_DEFAULT_PASS=guest
