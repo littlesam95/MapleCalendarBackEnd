@@ -102,10 +102,11 @@ echo -e "${YELLOW}[6/6] 컨테이너 시작 중...${NC}"
 RESOURCES_DIR="$PROJECT_DIR/src/main/resources"
 docker run -d \
     --name "$CONTAINER_NAME" \
+    --add-host=host.docker.internal:host-gateway \
+    -e SPRING_RABBITMQ_HOST=host.docker.internal \
     -e REDIS_HOST=host.docker.internal \
     -e REDIS_PORT=6379 \
     -e REDIS_PASSWORD=$REDIS_PASSWORD \
-    -e SPRING_RABBITMQ_HOST=host.docker.internal \
     -e SPRING_RABBITMQ_PORT=5672 \
     -e SPRING_RABBITMQ_USERNAME=guest \
     -e SPRING_RABBITMQ_PASSWORD=guest \
@@ -119,12 +120,13 @@ docker run -d \
     -e S3_BUCKET_NAME=$S3_BUCKET_NAME \
     -e TZ=Asia/Seoul \
     -v /etc/localtime:/etc/localtime:ro \
-    --add-host=host.docker.internal:host-gateway \
     --network host \
     -p 8080:8080 \
     --restart unless-stopped \
     -v "$RESOURCES_DIR:/app/resources:ro" \
     "$APP_NAME:latest"
+    --spring.rabbitmq.host=host.docker.internal \
+    --spring.redis.host=host.docker.internal \
 
 # 컨테이너 상태 확인
 sleep 5
