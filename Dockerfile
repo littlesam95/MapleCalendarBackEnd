@@ -25,4 +25,4 @@ EXPOSE 8080
 
 # 애플리케이션 실행
 # 외부 설정 파일 경로 지정 (볼륨 마운트된 resources 디렉토리 사용)
-ENTRYPOINT exec java $JAVA_OPTS -Dspring.profiles.active=secret -Dspring.config.additional-location=file:/app/resources/ -jar app.jar
+ENTRYPOINT ["java", "-Dspring.profiles.active=secret", "-Dspring.config.additional-location=file:/app/resources/", "-jar", "app.jar"]
