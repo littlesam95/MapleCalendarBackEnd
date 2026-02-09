@@ -257,19 +257,20 @@ class BossPartyService(
 
     // 3. 파티 채팅 전체 삭제
     @Transactional
-    fun deleteMessage(messageId: Long, userEmail: String): BossPartyChatMessage {
-        val character = mapleCharacterRepository.findFirstByMemberEmailAndIsActiveTrue(userEmail)
-            ?: throw MapleCharacterNotFoundException()
+    fun deleteMessage(partyId: Long, messageId: Long, userEmail: String): BossPartyChatMessage {
+        // 1. 해당 파티에 참여 중인 유저의 정보를 가져옵니다. (이미 검증된 로직)
+        val partyMember = bossPartyMemberRepository.findByBossPartyIdAndCharacterMemberEmail(partyId, userEmail)
+            ?: throw AccessDeniedException("해당 파티의 멤버가 아닙니다.")
 
         val message = bossPartyChatMessageRepository.findById(messageId)
             .orElseThrow { BossPartyChatMessageNotFoundException() }
 
-        // 권한 확인: 본인이 쓴 메시지인지 체크
-        if (message.character.id != character.id) {
+        // 2. 권한 확인: 메시지를 쓴 캐릭터 ID와 현재 파티에 참여 중인 내 캐릭터 ID가 같은지 비교
+        if (message.character.id != partyMember.character.id) {
             throw DeleteBossPartyChatMessageDeniedException()
         }
 
-        // 논리 삭제 처리
+        // 3. 논리 삭제 처리
         message.markAsDeleted()
         // TODO: 이 시점에 WebSocket을 통해 "특정 ID의 메시지가 삭제됨"을 파티원들에게 브로드캐스팅하는 로직을 추가
 
