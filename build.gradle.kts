@@ -75,6 +75,9 @@ dependencies {
 
     // Redis
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
+
+    // Rabbit MQ
+    implementation("org.springframework.boot:spring-boot-starter-amqp")
 }
 
 kotlin {
