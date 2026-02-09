@@ -126,7 +126,7 @@ docker run -d \
     -v "$RESOURCES_DIR:/app/resources:ro" \
     "$APP_NAME:latest" \
     --spring.rabbitmq.host=host.docker.internal \
-    --spring.redis.host=host.docker.internal
+    --redis.host=host.docker.internal
 
 # 컨테이너 상태 확인
 sleep 5
