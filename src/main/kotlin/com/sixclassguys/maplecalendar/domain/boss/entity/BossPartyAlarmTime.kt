@@ -21,5 +21,5 @@ class BossPartyAlarmTime(
     val message: String,
 
     @Column(nullable = false)
-    val isSent: Boolean = false
+    var isSent: Boolean = false
 )

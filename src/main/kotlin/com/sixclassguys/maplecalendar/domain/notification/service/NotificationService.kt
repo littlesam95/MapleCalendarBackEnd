@@ -4,12 +4,17 @@ import com.google.firebase.messaging.AndroidConfig
 import com.google.firebase.messaging.FirebaseMessaging
 import com.google.firebase.messaging.Message
 import com.google.firebase.messaging.Notification
+import com.sixclassguys.maplecalendar.domain.boss.repository.BossPartyAlarmTimeRepository
+import com.sixclassguys.maplecalendar.domain.eventalarm.repository.EventAlarmTimeRepository
 import com.sixclassguys.maplecalendar.domain.eventalarm.repository.EventAlarmRepository
+import com.sixclassguys.maplecalendar.domain.member.entity.Member
 import com.sixclassguys.maplecalendar.domain.member.repository.MemberRepository
 import com.sixclassguys.maplecalendar.domain.member.service.MemberService
 import com.sixclassguys.maplecalendar.domain.notification.dto.FcmTokenRequest
 import com.sixclassguys.maplecalendar.domain.notification.entity.NotificationToken
 import com.sixclassguys.maplecalendar.domain.notification.repository.NotificationTokenRepository
+import com.sixclassguys.maplecalendar.global.dto.AlarmType
+import com.sixclassguys.maplecalendar.global.dto.RedisAlarmDto
 import com.sixclassguys.maplecalendar.infrastructure.persistence.event.EventRepository
 import org.slf4j.LoggerFactory
 import org.springframework.data.repository.findByIdOrNull
@@ -23,12 +28,83 @@ import java.time.LocalTime
 @Transactional
 class NotificationService(
     private val notificationTokenRepository: NotificationTokenRepository,
+    private val eventAlarmTimeRepository: EventAlarmTimeRepository,
+    private val bossPartyAlarmTimeRepository: BossPartyAlarmTimeRepository,
     private val eventRepository: EventRepository,
     private val memberRepository: MemberRepository,
-    private val eventAlarmRepository: EventAlarmRepository
+    private val eventAlarmRepository: EventAlarmRepository,
+    private val firebaseMessaging: FirebaseMessaging
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
+
+    @Transactional
+    fun processRedisAlarm(alarm: RedisAlarmDto) {
+        // 1. 최신 DB 상태 확인 (사용자가 알람을 취소했거나 삭제했을 수 있음)
+        val isStillValid = when (alarm.type) {
+            AlarmType.EVENT -> checkEventAlarmValid(alarm.targetId)
+            AlarmType.BOSS -> checkBossAlarmValid(alarm.targetId)
+        }
+
+        if (!isStillValid) {
+            log.info("🚫 알람 발송 취소: 유효하지 않거나 이미 발송됨 (ID: ${alarm.targetId}, Type: ${alarm.type})")
+            return
+        }
+
+        // 2. 수신자 토큰 조회
+        val member = memberRepository.findByIdOrNull(alarm.memberId)
+        if (member == null || member.tokens.isEmpty()) {
+            log.warn("⚠️ 알람 발송 실패: 유저를 찾을 수 없거나 등록된 FCM 토큰이 없음 (MemberID: ${alarm.memberId})")
+            return
+        }
+
+        // 3. 실제 FCM 발송
+        sendFcmPush(member, alarm)
+
+        // 4. 발송 완료 상태 업데이트 (Postgres)
+        markAsSent(alarm)
+    }
+
+    private fun checkEventAlarmValid(targetId: Long): Boolean {
+        val alarmTime = eventAlarmTimeRepository.findByIdOrNull(targetId) ?: return false
+        // 알람이 활성화(isEnabled) 되어 있고, 아직 발송되지 않았어야(isSent == false) 함
+        return alarmTime.eventAlarm.isEnabled && !alarmTime.isSent
+    }
+
+    private fun checkBossAlarmValid(targetId: Long): Boolean {
+        val alarmTime = bossPartyAlarmTimeRepository.findByIdOrNull(targetId) ?: return false
+        return !alarmTime.isSent // 보스 알람은 별도의 isEnabled가 없다면 isSent만 체크
+    }
+
+    private fun sendFcmPush(member: Member, alarm: RedisAlarmDto) {
+        member.tokens.forEach { tokenEntity ->
+            val message = Message.builder()
+                .setToken(tokenEntity.token)
+                .setNotification(
+                    Notification.builder()
+                        .setTitle(alarm.title)
+                        .setBody(alarm.message)
+                        .build()
+                )
+                .putData("type", alarm.type.name)
+                .putData("targetId", alarm.targetId.toString())
+                .build()
+
+            try {
+                firebaseMessaging.send(message)
+                log.info("🚀 FCM 발송 성공: 유저=${member.id}, 제목=${alarm.title}")
+            } catch (e: Exception) {
+                log.error("❌ FCM 발송 실패: 토큰=${tokenEntity.token.take(10)}..., 사유=${e.message}")
+            }
+        }
+    }
+
+    private fun markAsSent(alarm: RedisAlarmDto) {
+        when (alarm.type) {
+            AlarmType.EVENT -> eventAlarmTimeRepository.findByIdOrNull(alarm.targetId)?.apply { isSent = true }
+            AlarmType.BOSS -> bossPartyAlarmTimeRepository.findByIdOrNull(alarm.targetId)?.apply { isSent = true }
+        }
+    }
 
 //    private fun sendFcmMessage(alarmSetting: EventAlarm) {
 //        val member = alarmSetting.member

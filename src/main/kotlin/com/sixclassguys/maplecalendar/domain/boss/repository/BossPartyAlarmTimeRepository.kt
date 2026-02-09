@@ -7,7 +7,8 @@ import org.springframework.data.repository.query.Param
 import org.springframework.stereotype.Repository
 
 @Repository
-interface BossPartyAlarmTimeRepository : JpaRepository<BossPartyAlarmTime, Long>{
+interface BossPartyAlarmTimeRepository : JpaRepository<BossPartyAlarmTime, Long> {
+
     @Query("""
         SELECT bat
         FROM BossPartyAlarmTime bat
@@ -16,4 +17,6 @@ interface BossPartyAlarmTimeRepository : JpaRepository<BossPartyAlarmTime, Long>
         WHERE mbpm.bossPartyId = :bossPartyId
     """)
     fun findByBossPartyId(@Param("bossPartyId") bossPartyId: Long): List<BossPartyAlarmTime>
+
+    fun findByIsSentFalse(): List<BossPartyAlarmTime>
 }
