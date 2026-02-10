@@ -33,6 +33,9 @@ class BossPartyChatMessage(
     @Column(nullable = false, length = 500)
     var content: String,
 
+    @Column(name = "unread_count", nullable = false)
+    var unreadCount: Int = 0,
+
     @Enumerated(EnumType.STRING)
     @Column(name = "message_type", nullable = false)
     var messageType: BossPartyChatMessageType, // TALK, JOIN, LEAVE 등을 구분하는 ENUM

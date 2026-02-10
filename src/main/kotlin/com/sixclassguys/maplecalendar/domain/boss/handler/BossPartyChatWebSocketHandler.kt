@@ -150,6 +150,7 @@ class BossPartyChatWebSocketHandler(
             senderWorld = "",
             senderImage = "",
             content = "",
+            unreadCount = 0,
             isMine = false,
             isHidden = false,
             createdAt = "",
