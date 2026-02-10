@@ -4,19 +4,26 @@ import com.google.firebase.messaging.AndroidConfig
 import com.google.firebase.messaging.FirebaseMessaging
 import com.google.firebase.messaging.Message
 import com.google.firebase.messaging.Notification
+import com.sixclassguys.maplecalendar.domain.boss.entity.BossPartyAlarmTime
+import com.sixclassguys.maplecalendar.domain.boss.enums.JoinStatus
+import com.sixclassguys.maplecalendar.domain.boss.enums.RegistrationMode
 import com.sixclassguys.maplecalendar.domain.boss.repository.BossPartyAlarmTimeRepository
+import com.sixclassguys.maplecalendar.domain.boss.repository.BossPartyMemberRepository
+import com.sixclassguys.maplecalendar.domain.boss.repository.BossPartyRepository
+import com.sixclassguys.maplecalendar.domain.boss.repository.MemberBossPartyMappingRepository
 import com.sixclassguys.maplecalendar.domain.eventalarm.repository.EventAlarmTimeRepository
 import com.sixclassguys.maplecalendar.domain.eventalarm.repository.EventAlarmRepository
 import com.sixclassguys.maplecalendar.domain.member.entity.Member
 import com.sixclassguys.maplecalendar.domain.member.repository.MemberRepository
-import com.sixclassguys.maplecalendar.domain.member.service.MemberService
 import com.sixclassguys.maplecalendar.domain.notification.dto.FcmTokenRequest
 import com.sixclassguys.maplecalendar.domain.notification.entity.NotificationToken
 import com.sixclassguys.maplecalendar.domain.notification.repository.NotificationTokenRepository
 import com.sixclassguys.maplecalendar.global.dto.AlarmType
 import com.sixclassguys.maplecalendar.global.dto.RedisAlarmDto
+import com.sixclassguys.maplecalendar.global.util.AlarmProducer
 import com.sixclassguys.maplecalendar.infrastructure.persistence.event.EventRepository
 import org.slf4j.LoggerFactory
+import org.springframework.data.redis.core.RedisTemplate
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -27,41 +34,98 @@ import java.time.LocalTime
 @Service
 @Transactional
 class NotificationService(
+    private val redisTemplate: RedisTemplate<String, String>,
     private val notificationTokenRepository: NotificationTokenRepository,
     private val eventAlarmTimeRepository: EventAlarmTimeRepository,
+    private val bossPartyRepository: BossPartyRepository,
+    private val bossPartyMemberRepository: BossPartyMemberRepository,
     private val bossPartyAlarmTimeRepository: BossPartyAlarmTimeRepository,
+    private val memberBossPartyMappingRepository: MemberBossPartyMappingRepository,
     private val eventRepository: EventRepository,
     private val memberRepository: MemberRepository,
+    private val alarmProducer: AlarmProducer,
     private val eventAlarmRepository: EventAlarmRepository
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
 
     @Transactional
-    fun processRedisAlarm(alarm: RedisAlarmDto) {
-        // 1. 최신 DB 상태 확인 (사용자가 알람을 취소했거나 삭제했을 수 있음)
-        val isStillValid = when (alarm.type) {
-            AlarmType.EVENT -> checkEventAlarmValid(alarm.targetId)
-            AlarmType.BOSS -> checkBossAlarmValid(alarm.targetId)
+    fun processAlarm(alarm: RedisAlarmDto) {
+        when (alarm.type) {
+            AlarmType.EVENT -> { /* 추후 이벤트 알람 발송 추가 */}
+            AlarmType.BOSS -> processBossPartyAlarm(alarm)
         }
+    }
 
-        if (!isStillValid) {
-            log.info("🚫 알람 발송 취소: 유효하지 않거나 이미 발송됨 (ID: ${alarm.targetId}, Type: ${alarm.type})")
+    @Transactional
+    fun processBossPartyAlarm(alarm: RedisAlarmDto) {
+        val alarmTimeEntity = bossPartyAlarmTimeRepository.findByIdOrNull(alarm.targetId)
+            ?: return
+
+        if (!checkBossAlarmValid(alarm.targetId) || isAlarmCancelled(alarm)) {
+            log.info("🚫 취소되었거나 이미 처리된 알람입니다. targetId=${alarm.targetId}")
             return
         }
 
-        // 2. 수신자 토큰 조회
-        val member = memberRepository.findByIdOrNull(alarm.memberId)
-        if (member == null || member.tokens.isEmpty()) {
-            log.warn("⚠️ 알람 발송 실패: 유저를 찾을 수 없거나 등록된 FCM 토큰이 없음 (MemberID: ${alarm.memberId})")
-            return
+        val partyId = alarm.partyId ?: return
+
+        // 1. 해당 파티의 승인된 멤버(ACCEPTED) 목록을 가져옴
+        val members = bossPartyMemberRepository.findAllWithMemberAndTokensByPartyId(partyId, JoinStatus.ACCEPTED)
+
+        members.forEach { partyMember ->
+            val member = partyMember.character.member
+
+            // 2. 개별 유저의 알람 설정(On/Off) 확인
+            val mapping = memberBossPartyMappingRepository.findByMemberIdAndBossPartyId(member.id, alarm.partyId)
+
+            if (mapping?.isPartyAlarmEnabled == true) {
+                sendFcmPush(member, alarm) // 실제 발송
+            }
         }
 
-        // 3. 실제 FCM 발송
-        sendFcmPush(member, alarm)
-
-        // 4. 발송 완료 상태 업데이트 (Postgres)
+        // 3. 발송 완료 처리 (파티 알람 레코드 1개만 업데이트)
         markAsSent(alarm)
+
+        // 3. 💡 주기 모드(PERIODIC)라면 다음 주 알람 예약 로직 실행
+        if (alarmTimeEntity.registrationMode == RegistrationMode.PERIODIC) {
+            scheduleNextPeriodicAlarm(alarmTimeEntity, alarm)
+        }
+    }
+
+    private fun scheduleNextPeriodicAlarm(currentAlarm: BossPartyAlarmTime, originalDto: RedisAlarmDto) {
+        // 파티의 현재 주기 설정(DayOfWeek 등)을 다시 가져옵니다.
+        // (그 사이에 방장이 주기를 수정했을 수도 있으므로 DB 조회가 필요합니다)
+        val bossParty = bossPartyRepository.findByIdOrNull(currentAlarm.bossPartyId) ?: return
+
+        // 주기가 설정되어 있는 파티인 경우에만 진행
+        if (bossParty.alarmDayOfWeek != null) {
+            // 현재 알람 예정 시각으로부터 정확히 7일 뒤 계산
+            val nextTime = currentAlarm.alarmTime.plusWeeks(1)
+
+            // 중복 방지: 이미 해당 시간에 알람이 있는지 확인
+            if (!bossPartyAlarmTimeRepository.existsByBossPartyIdAndAlarmTime(bossParty.id, nextTime)) {
+                val nextAlarmEntity = bossPartyAlarmTimeRepository.save(
+                    BossPartyAlarmTime(
+                        bossPartyId = bossParty.id,
+                        alarmTime = nextTime,
+                        message = bossParty.alarmMessage ?: currentAlarm.message,
+                        registrationMode = RegistrationMode.PERIODIC
+                    )
+                )
+
+                // RabbitMQ에 다음 주차 알람 예약 발송
+                val nextDto = originalDto.copy(targetId = nextAlarmEntity.id)
+                alarmProducer.reserveAlarm(nextDto, nextTime)
+
+                log.info("🗓️ 다음 주기 알람 예약 완료: 파티=${bossParty.id}, 시간=$nextTime")
+            }
+        }
+    }
+
+    private fun isAlarmCancelled(alarm: RedisAlarmDto): Boolean {
+        // Redis에 "alarm:cancel:BOSS:123" 같은 키가 있는지 확인
+        val cancelKey = "alarm:cancel:${alarm.type}:${alarm.targetId}"
+        return redisTemplate.hasKey(cancelKey)
     }
 
     private fun checkEventAlarmValid(targetId: Long): Boolean {
@@ -82,16 +146,17 @@ class NotificationService(
                 .setNotification(
                     Notification.builder()
                         .setTitle(alarm.title)
-                        .setBody(alarm.message)
+                        .setBody(alarm.message) // 💡 남은 기간 표시
                         .build()
                 )
                 .putData("type", alarm.type.name)
                 .putData("targetId", alarm.targetId.toString())
+                .putData("partyId", alarm.partyId.toString()) // 추가 정보가 있다면 포함
                 .build()
 
             try {
                 FirebaseMessaging.getInstance().send(message)
-                log.info("🚀 FCM 발송 성공: 유저=${member.id}, 제목=${alarm.title}")
+                log.info("🚀 FCM 데이터 메시지 발송 성공: 유저=${member.id}")
             } catch (e: Exception) {
                 log.error("❌ FCM 발송 실패: 토큰=${tokenEntity.token.take(10)}..., 사유=${e.message}")
             }
