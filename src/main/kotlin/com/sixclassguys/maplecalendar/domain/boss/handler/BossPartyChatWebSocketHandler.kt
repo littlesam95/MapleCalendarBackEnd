@@ -3,6 +3,7 @@ package com.sixclassguys.maplecalendar.domain.boss.handler
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.sixclassguys.maplecalendar.domain.boss.dto.BossPartyChatMessageResponse
 import com.sixclassguys.maplecalendar.domain.boss.dto.toResponse
+import com.sixclassguys.maplecalendar.domain.boss.entity.BossPartyChatMessage
 import com.sixclassguys.maplecalendar.domain.boss.service.BossPartyService
 import com.sixclassguys.maplecalendar.domain.character.repository.MapleCharacterRepository
 import com.sixclassguys.maplecalendar.domain.boss.enums.BossPartyChatMessageType
@@ -122,6 +123,23 @@ class BossPartyChatWebSocketHandler(
         }
     }
 
+    fun broadcastHide(partyId: Long, updatedChat: BossPartyChatMessage) {
+        val hideResponse = updatedChat.toResponse(0L)
+        val jsonResponse = objectMapper.writeValueAsString(hideResponse)
+
+        roomSessions[partyId]?.forEach { session ->
+            synchronized(session) {
+                if (session.isOpen) {
+                    try {
+                        session.sendMessage(TextMessage(jsonResponse))
+                    } catch (e: Exception) {
+                        println("전송 에러: ${e.message}")
+                    }
+                }
+            }
+        }
+    }
+
     fun broadcastDelete(partyId: Long, messageId: Long) {
         val deleteResponse = BossPartyChatMessageResponse(
             id = messageId,
@@ -132,7 +150,9 @@ class BossPartyChatWebSocketHandler(
             senderWorld = "",
             senderImage = "",
             content = "",
+            unreadCount = 0,
             isMine = false,
+            isHidden = false,
             createdAt = "",
         )
         val jsonResponse = objectMapper.writeValueAsString(deleteResponse)

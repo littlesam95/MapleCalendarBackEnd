@@ -10,9 +10,11 @@ data class BossPartyChatMessageResponse(
     val senderWorld: String,
     val senderImage: String?,
     val content: String,
+    val unreadCount: Int,
     val messageType: BossPartyChatMessageType,
     val isMine: Boolean, // 조회하는 사람의 ID와 비교하여 서버에서 계산해서 전달
     val isDeleted: Boolean,
+    val isHidden: Boolean,
     val createdAt: String
 )
 
@@ -24,8 +26,10 @@ fun BossPartyChatMessage.toResponse(currentCharacterId: Long) = BossPartyChatMes
     senderWorld = this.character.worldName,
     senderImage = this.character.characterImage,
     content = this.content,
+    unreadCount = this.unreadCount,
     messageType = this.messageType,
     isMine = this.character.id == currentCharacterId,
     isDeleted = this.isDeleted,
+    isHidden = this.isHidden,
     createdAt = this.createdAt.toString()
 )

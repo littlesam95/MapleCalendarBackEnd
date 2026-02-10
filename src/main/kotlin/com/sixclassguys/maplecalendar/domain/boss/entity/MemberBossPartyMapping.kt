@@ -19,6 +19,9 @@ class MemberBossPartyMapping(
     @Column(name = "member_id", nullable = false)
     val memberId: Long,
 
+    @Column(name = "last_read_chat_id", nullable = true)
+    var lastReadChatId: Long = 0L,
+
     @Column(name = "is_party_alarm_enabled", nullable = false)
     var isPartyAlarmEnabled: Boolean,
 

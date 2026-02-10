@@ -5,10 +5,13 @@ import org.springframework.data.domain.Pageable
 import org.springframework.data.domain.Slice
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Query
+import org.springframework.data.repository.query.Param
 import org.springframework.stereotype.Repository
 
 @Repository
 interface BossPartyChatMessageRepository : JpaRepository<BossPartyChatMessage, Long> {
+
+    fun findMaxIdByBossPartyId(@Param("partyId") partyId: Long): Long?
 
     // 특정 파티의 채팅 내역을 최신순으로 페이징 조회
     // Fetch Join을 사용하여 MapleCharacter 정보를 한 번에 가져옴 (N+1 방지)
