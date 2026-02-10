@@ -3,6 +3,7 @@ package com.sixclassguys.maplecalendar.global.config
 import com.sixclassguys.maplecalendar.domain.auth.jwt.JwtAuthenticationFilter
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.http.HttpMethod
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity
 import org.springframework.security.config.http.SessionCreationPolicy
@@ -33,6 +34,7 @@ class SecurityConfig(
             .csrf { it.disable() }
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .authorizeHttpRequests {
+                it.requestMatchers(HttpMethod.POST, "/api/boss-parties/*/alarms").permitAll()
                 it.requestMatchers(
                     "/api/events/today",
                     "/api/auth/**",
