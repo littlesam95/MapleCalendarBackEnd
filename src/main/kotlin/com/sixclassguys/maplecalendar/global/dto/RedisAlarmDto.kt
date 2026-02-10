@@ -9,4 +9,4 @@ data class RedisAlarmDto(
     val message: String      // 알림 내용
 )
 
-enum class AlarmType { EVENT, BOSS }
+enum class AlarmType { EVENT, BOSS, BOSSCHAT }

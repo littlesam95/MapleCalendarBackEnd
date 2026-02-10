@@ -7,6 +7,7 @@ import com.google.firebase.messaging.Notification
 import com.sixclassguys.maplecalendar.domain.boss.entity.BossPartyAlarmTime
 import com.sixclassguys.maplecalendar.domain.boss.enums.JoinStatus
 import com.sixclassguys.maplecalendar.domain.boss.enums.RegistrationMode
+import com.sixclassguys.maplecalendar.domain.boss.handler.BossPartyChatWebSocketHandler
 import com.sixclassguys.maplecalendar.domain.boss.repository.BossPartyAlarmTimeRepository
 import com.sixclassguys.maplecalendar.domain.boss.repository.BossPartyMemberRepository
 import com.sixclassguys.maplecalendar.domain.boss.repository.BossPartyRepository
@@ -54,6 +55,7 @@ class NotificationService(
         when (alarm.type) {
             AlarmType.EVENT -> { /* 추후 이벤트 알람 발송 추가 */}
             AlarmType.BOSS -> processBossPartyAlarm(alarm)
+            else -> {}
         }
     }
 
@@ -89,6 +91,40 @@ class NotificationService(
         // 3. 💡 주기 모드(PERIODIC)라면 다음 주 알람 예약 로직 실행
         if (alarmTimeEntity.registrationMode == RegistrationMode.PERIODIC) {
             scheduleNextPeriodicAlarm(alarmTimeEntity, alarm)
+        }
+    }
+
+    @Transactional(readOnly = true)
+    fun sendBossPartyChatAlarm(partyId: Long, senderCharacterId: Long, content: String, senderName: String) {
+        // 1. 해당 파티의 승인된 멤버들 조회
+        val members = bossPartyMemberRepository.findAllWithMemberAndTokensByPartyId(partyId, JoinStatus.ACCEPTED)
+
+        // 2. 현재 웹소켓 세션에 연결된 캐릭터 ID 목록 가져오기
+        val activeCharacterIds = BossPartyChatWebSocketHandler.getActiveCharacterIds(partyId)
+
+        members.forEach { partyMember ->
+            val member = partyMember.character.member
+            val targetCharacterId = partyMember.character.id
+
+            // 본인 제외 AND 현재 채팅방 접속자 제외
+            if (targetCharacterId != senderCharacterId && !activeCharacterIds.contains(targetCharacterId)) {
+                member.tokens.forEach { tokenEntity ->
+                    val message = Message.builder()
+                        .setToken(tokenEntity.token)
+                        // ✅ 채팅 알림은 푸시 팝업이 떠야 하므로 Data Payload 방식을 사용
+                        .putData("type", "BOSSCHAT")
+                        .putData("partyId", partyId.toString())
+                        .putData("title", senderName)
+                        .putData("body", content)
+                        .build()
+
+                    try {
+                        FirebaseMessaging.getInstance().send(message)
+                    } catch (e: Exception) {
+                        log.error("❌ 채팅 알림 발송 실패: 유저=${member.id}, 토큰=${tokenEntity.token.take(10)}")
+                    }
+                }
+            }
         }
     }
 
@@ -192,6 +228,7 @@ class NotificationService(
         when (alarm.type) {
             AlarmType.EVENT -> eventAlarmTimeRepository.findByIdOrNull(alarm.targetId)?.apply { isSent = true }
             AlarmType.BOSS -> bossPartyAlarmTimeRepository.findByIdOrNull(alarm.targetId)?.apply { isSent = true }
+            else -> {}
         }
     }
 
