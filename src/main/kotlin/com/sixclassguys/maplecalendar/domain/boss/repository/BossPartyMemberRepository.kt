@@ -14,7 +14,18 @@ interface BossPartyMemberRepository : JpaRepository<BossPartyMember, Long> {
 
     fun findAllByBossPartyId(bossPartyId: Long): List<BossPartyMember>
 
-    fun findAllByBossPartyIdAndJoinStatus(bossPartyId: Long, joinStatus: JoinStatus): List<BossPartyMember>
+    @Query("""
+    SELECT m FROM BossPartyMember m 
+    JOIN FETCH m.character c
+    JOIN FETCH c.member mem
+    LEFT JOIN FETCH mem.tokens
+    WHERE m.bossParty.id = :partyId 
+    AND m.joinStatus = :joinStatus
+""")
+    fun findAllWithMemberAndTokensByPartyId(
+        @Param("partyId") partyId: Long,
+        @Param("joinStatus") joinStatus: JoinStatus
+    ): List<BossPartyMember>
 
     @Query("""
         SELECT m FROM BossPartyMember m 

@@ -1,5 +1,7 @@
 package com.sixclassguys.maplecalendar.domain.boss.controller
 
+import com.sixclassguys.maplecalendar.domain.boss.dto.BossPartyAlarmPeriodRequest
+import com.sixclassguys.maplecalendar.domain.boss.dto.BossPartyAlarmTimeRequest
 import com.sixclassguys.maplecalendar.domain.boss.dto.BossPartyAlarmTimeResponse
 import com.sixclassguys.maplecalendar.domain.boss.dto.BossPartyChatMessageResponse
 import com.sixclassguys.maplecalendar.domain.boss.dto.BossPartyCreateRequest
@@ -19,6 +21,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.security.core.userdetails.UserDetails
 import org.springframework.web.bind.annotation.DeleteMapping
+import org.springframework.web.bind.annotation.PatchMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
@@ -73,8 +76,68 @@ class BossPartyController(
         @AuthenticationPrincipal userDetails: UserDetails,
         @Parameter(description = "조회할 보스 파티의 ID", required = true)
         @PathVariable bossPartyId: Long
-    ): List<BossPartyAlarmTimeResponse> {
-        return bossPartyService.getAlarmTimesByBossPartyId(bossPartyId)
+    ): ResponseEntity<List<BossPartyAlarmTimeResponse>> {
+        val response = bossPartyService.getBossPartyAlarmTimes(bossPartyId)
+
+        return ResponseEntity.ok(response)
+    }
+
+    @PatchMapping("/{bossPartyId}/alarm-times/toggle")
+    fun updateAlarmSetting(
+        @AuthenticationPrincipal userDetails: UserDetails,
+        @PathVariable bossPartyId: Long,
+        @RequestParam enabled: Boolean // 쿼리 스트링 (?enabled=true)
+    ): ResponseEntity<Unit> {
+        bossPartyService.togglePartyAlarm(userDetails.username, bossPartyId, enabled)
+
+        return ResponseEntity.ok().build()
+    }
+
+    @PostMapping("/{bossPartyId}/alarm-times")
+    fun createAlarm(
+        @AuthenticationPrincipal userDetails: UserDetails,
+        @PathVariable bossPartyId: Long,
+        @RequestBody request: BossPartyAlarmTimeRequest
+    ): ResponseEntity<List<BossPartyAlarmTimeResponse>> {
+        bossPartyService.createAlarmTime(
+            partyId = bossPartyId,
+            userEmail = userDetails.username,
+            hour = request.hour,
+            minute = request.minute,
+            date = request.date,
+            message = request.message
+        )
+        val response = bossPartyService.getBossPartyAlarmTimes(bossPartyId)
+
+        return ResponseEntity.ok(response)
+    }
+
+    @PatchMapping("/{bossPartyId}/alarm-period")
+    fun updateAlarmPeriod(
+        @AuthenticationPrincipal userDetails: UserDetails,
+        @PathVariable bossPartyId: Long,
+        @RequestBody request: BossPartyAlarmPeriodRequest
+    ): ResponseEntity<List<BossPartyAlarmTimeResponse>> {
+        bossPartyService.updateBossPartyAlarmPeriod(
+            partyId = bossPartyId,
+            userEmail = userDetails.username,
+            request = request
+        )
+        val response = bossPartyService.getBossPartyAlarmTimes(bossPartyId)
+
+        return ResponseEntity.ok(response)
+    }
+
+    @DeleteMapping("/{bossPartyId}/alarm-times/{alarmId}")
+    fun deleteAlarm(
+        @AuthenticationPrincipal userDetails: UserDetails,
+        @PathVariable bossPartyId: Long,
+        @PathVariable alarmId: Long
+    ): ResponseEntity<List<BossPartyAlarmTimeResponse>> {
+        bossPartyService.deleteAlarm(bossPartyId, alarmId, userDetails.username)
+        val response = bossPartyService.getBossPartyAlarmTimes(bossPartyId)
+
+        return ResponseEntity.ok(response)
     }
 
     @Operation(

@@ -1,5 +1,6 @@
 package com.sixclassguys.maplecalendar.domain.boss.service
 
+import com.sixclassguys.maplecalendar.domain.boss.dto.BossPartyAlarmPeriodRequest
 import com.sixclassguys.maplecalendar.domain.boss.dto.BossPartyAlarmTimeResponse
 import com.sixclassguys.maplecalendar.domain.boss.dto.BossPartyCreateRequest
 import com.sixclassguys.maplecalendar.domain.boss.dto.BossPartyMemberResponse
@@ -11,6 +12,7 @@ import com.sixclassguys.maplecalendar.domain.boss.dto.BossPartyDetailResponse
 import com.sixclassguys.maplecalendar.domain.boss.dto.BossPartyMemberDetail
 import com.sixclassguys.maplecalendar.domain.boss.dto.toResponse
 import com.sixclassguys.maplecalendar.domain.boss.entity.BossParty
+import com.sixclassguys.maplecalendar.domain.boss.entity.BossPartyAlarmTime
 import com.sixclassguys.maplecalendar.domain.boss.entity.BossPartyChatMessage
 import com.sixclassguys.maplecalendar.domain.boss.entity.BossPartyMember
 import com.sixclassguys.maplecalendar.domain.boss.entity.MemberBossPartyMapping
@@ -23,18 +25,27 @@ import com.sixclassguys.maplecalendar.domain.boss.repository.MemberBossPartyMapp
 import com.sixclassguys.maplecalendar.domain.character.repository.MapleCharacterRepository
 import com.sixclassguys.maplecalendar.domain.member.repository.MemberRepository
 import com.sixclassguys.maplecalendar.domain.boss.enums.BossPartyChatMessageType
+import com.sixclassguys.maplecalendar.domain.boss.enums.RegistrationMode
+import com.sixclassguys.maplecalendar.global.dto.AlarmType
+import com.sixclassguys.maplecalendar.global.dto.RedisAlarmDto
 import com.sixclassguys.maplecalendar.global.exception.AccessDeniedException
 import com.sixclassguys.maplecalendar.global.exception.BossPartyChatMessageNotFoundException
 import com.sixclassguys.maplecalendar.global.exception.BossPartyNotFoundException
 import com.sixclassguys.maplecalendar.global.exception.DeleteBossPartyChatMessageDeniedException
 import com.sixclassguys.maplecalendar.global.exception.MapleCharacterNotFoundException
 import com.sixclassguys.maplecalendar.global.exception.MemberNotFoundException
+import com.sixclassguys.maplecalendar.global.util.AlarmProducer
+import org.slf4j.LoggerFactory
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Slice
 import org.springframework.data.domain.Sort
+import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.DayOfWeek
+import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.temporal.TemporalAdjusters
 
 @Service
 class BossPartyService(
@@ -46,7 +57,10 @@ class BossPartyService(
     private val bossPartyAlarmTimeRepository: BossPartyAlarmTimeRepository,
     private val bossPartyChatMessageRepository: BossPartyChatMessageRepository,
     private val bossPartyBoardRepository: BossPartyBoardRepository,
+    private val alarmProducer: AlarmProducer
 ) {
+
+    private val log = LoggerFactory.getLogger(javaClass)
 
     @Transactional
     fun createParty(req: BossPartyCreateRequest, userEmail: String): Long {
@@ -130,13 +144,13 @@ class BossPartyService(
         val member = memberRepository.findByEmail(userEmail)
             ?: throw MemberNotFoundException()
 
-        // 1. 파티원 리스트 변환
+        // 1. 파티원 리스트 변환 (기존 로직 동일)
         val memberDetails = party.members.map { m ->
             BossPartyMemberDetail(
                 characterId = m.character.id,
                 characterName = m.character.characterName,
                 worldName = m.character.worldName,
-                characterClass = m.character.characterClass, // 엔티티의 필드명에 맞춰 매핑
+                characterClass = m.character.characterClass,
                 characterLevel = m.character.characterLevel,
                 characterImage = m.character.characterImage ?: "",
                 role = m.role,
@@ -149,7 +163,19 @@ class BossPartyService(
             m.role == PartyRole.LEADER && m.character.member.id == member.id
         }
 
-        // 2. 현재 로그인한 유저의 알람 설정 및 방장 여부 확인 (Mapping 테이블 조회 필요)
+        // 2. 🔔 미발송 알람 리스트 조회 (isSent = false)
+        val alarmTimes = bossPartyAlarmTimeRepository
+            .findByBossPartyIdAndIsSentFalseOrderByAlarmTimeAsc(partyId)
+            .map {
+                BossPartyAlarmTimeResponse(
+                    id = it.id,
+                    alarmTime = it.alarmTime,
+                    message = it.message,
+                    isSent = it.isSent,
+                    registrationMode = it.registrationMode
+                )
+            }
+
         val mapping = memberBossPartyMappingRepository.findByMemberIdAndBossPartyId(member.id, partyId)
 
         return BossPartyDetailResponse(
@@ -159,24 +185,201 @@ class BossPartyService(
             boss = party.boss,
             difficulty = party.difficulty,
             members = memberDetails,
+            alarms = alarmTimes, // 👈 조회된 리스트 주입
             isLeader = isLeader,
             isPartyAlarmEnabled = mapping?.isPartyAlarmEnabled ?: true,
             isChatAlarmEnabled = mapping?.isChatAlarmEnabled ?: true,
+            alarmDayOfWeek = party.alarmDayOfWeek,
+            alarmHour = party.alarmHour,
+            alarmMinute = party.alarmMinute,
+            alarmMessage = party.alarmMessage,
             createdAt = party.createdAt
         )
     }
 
     @Transactional
-    fun getAlarmTimesByBossPartyId(bossPartyId: Long): List<BossPartyAlarmTimeResponse> {
+    fun togglePartyAlarm(email: String, bossPartyId: Long, enabled: Boolean) {
+        val member = memberRepository.findByEmail(email)
+            ?: throw IllegalArgumentException("존재하지 않는 사용자입니다.")
 
-        val alarmTimes = bossPartyAlarmTimeRepository.findByBossPartyId(bossPartyId)
+        val mapping = memberBossPartyMappingRepository.findByMemberIdAndBossPartyId(member.id, bossPartyId)
+            ?: throw IllegalArgumentException("해당 파티의 멤버가 아닙니다.")
+
+        mapping.isPartyAlarmEnabled = enabled
+        // Dirty Checking
+    }
+
+    @Transactional
+    fun createAlarmTime(partyId: Long, userEmail: String, hour: Int, minute: Int, date: LocalDate, message: String) {
+        // 1. 해당 파티에 속한 유저 정보와 역할을 한 번에 조회
+        val party = bossPartyRepository.findById(partyId)
+            .orElseThrow { BossPartyNotFoundException() }
+        val partyMember = bossPartyMemberRepository.findByBossPartyIdAndCharacterMemberEmail(partyId, userEmail)
+            ?: throw AccessDeniedException("해당 파티의 멤버가 아닙니다.")
+
+        // 2. 역할(Role) 확인 (방장인지 체크)
+        if (partyMember.role != PartyRole.LEADER) {
+            throw AccessDeniedException("방장만 알람을 설정할 수 있습니다.")
+        }
+
+        val alarmDateTime = date.atTime(hour, minute)
+
+        if (alarmDateTime.isBefore(LocalDateTime.now())) {
+            throw AccessDeniedException("현재보다 이전 시간에 예약된 알람입니다.")
+        }
+
+        // 2. 알람 시간 데이터 저장
+        val savedTime = bossPartyAlarmTimeRepository.save(
+            BossPartyAlarmTime(
+                bossPartyId = partyId,
+                alarmTime = alarmDateTime,
+                message = message,
+                registrationMode = RegistrationMode.SELECT
+            )
+        )
+
+        // 3. RabbitMQ 예약 (파티 단위로 1개의 메시지만 발행)
+        val dto = RedisAlarmDto(
+            type = AlarmType.BOSS,
+            targetId = savedTime.id,
+            memberId = 0L, // 개별 전송이 아니므로 0 또는 공백 처리
+            partyId = partyId, // DTO에 partyId 필드 추가 필요
+            title = party.title,
+            message = message
+        )
+        alarmProducer.reserveAlarm(dto, alarmDateTime)
+    }
+
+    private fun calculateNextAlarmTime(dayOfWeek: DayOfWeek, hour: Int, minute: Int): LocalDateTime {
+        val now = LocalDateTime.now()
+        var next = now.with(TemporalAdjusters.nextOrSame(dayOfWeek))
+            .withHour(hour).withMinute(minute).withSecond(0).withNano(0)
+
+        // 만약 계산된 시간이 현재보다 과거라면(오늘인데 시간이 지난 경우), 다음 주 해당 요일로 넘김
+        if (next.isBefore(now)) {
+            next = next.plusWeeks(1)
+        }
+
+        // 추가적인 메이플 목요일 주차 로직이 필요하다면 여기서 검증
+        return next
+    }
+
+    @Transactional
+    fun updateBossPartyAlarmPeriod(
+        partyId: Long,
+        userEmail: String,
+        request: BossPartyAlarmPeriodRequest
+    ) {
+        // 1. 방장 권한 확인 (기존 로직 활용)
+        val partyMember = bossPartyMemberRepository.findByBossPartyIdAndCharacterMemberEmail(partyId, userEmail)
+            ?: throw AccessDeniedException("해당 파티의 멤버가 아닙니다.")
+
+        if (partyMember.role != PartyRole.LEADER) {
+            throw AccessDeniedException("방장만 알람 주기를 설정할 수 있습니다.")
+        }
+
+        // 2. BossParty 엔티티에 주기 정보 갱신
+        val party = bossPartyRepository.findById(partyId)
+            .orElseThrow { BossPartyNotFoundException() }
+
+        if (request.dayOfWeek == null) {
+            // [CASE] 주기를 제거하는 경우
+            party.apply {
+                this.alarmDayOfWeek = null
+                this.alarmHour = null
+                this.alarmMinute = null
+                this.alarmMessage = null
+            }
+
+            // 기존의 모든 주기성 알람(PERIODIC) 삭제 (미래 알람 위주)
+            bossPartyAlarmTimeRepository.deleteFuturePeriodicAlarms(
+                partyId,
+                RegistrationMode.PERIODIC
+            )
+
+            // RabbitMQ 예약 취소 로직이 필요하다면 여기서 추가 수행 (보통 DB 삭제 시 Consumer에서 처리하거나 여기서 별도 처리)
+
+        } else {
+            party.apply {
+                this.alarmDayOfWeek = request.dayOfWeek
+                this.alarmHour = request.hour
+                this.alarmMinute = request.minute
+                this.alarmMessage = request.message
+            }
+
+            // 3. 기존의 '미래 주기 알람(PERIODIC)' 데이터 제거
+            // SELECT 모드(수동 예약)는 유지하고, 기존 주기에 의해 생성된 미발송 알람만 지웁니다.
+            bossPartyAlarmTimeRepository.deleteFuturePeriodicAlarms(
+                partyId,
+                RegistrationMode.PERIODIC
+            )
+
+            // 4. 즉시 반영 여부에 따른 신규 알람 예약
+            if (request.isImmediateApply) {
+                val nextAlarmTime = calculateNextAlarmTime(request.dayOfWeek, request.hour, request.minute)
+
+                // 중복 방지: 동일 시간에 이미 수동(SELECT) 알람이 있는지 확인
+                if (!bossPartyAlarmTimeRepository.existsByBossPartyIdAndAlarmTime(partyId, nextAlarmTime)) {
+                    val savedTime = bossPartyAlarmTimeRepository.save(
+                        BossPartyAlarmTime(
+                            bossPartyId = partyId,
+                            alarmTime = nextAlarmTime,
+                            message = request.message,
+                            registrationMode = RegistrationMode.PERIODIC
+                        )
+                    )
+
+                    // 5. RabbitMQ 예약 발송
+                    val dto = RedisAlarmDto(
+                        type = AlarmType.BOSS,
+                        targetId = savedTime.id,
+                        memberId = 0L,
+                        partyId = partyId,
+                        title = party.title,
+                        message = request.message
+                    )
+                    alarmProducer.reserveAlarm(dto, nextAlarmTime)
+                }
+            }
+        }
+    }
+
+    @Transactional
+    fun deleteAlarm(partyId: Long, alarmId: Long, userEmail: String) {
+        // 1. 방장 권한 확인 (기존 로직)
+        val leader = bossPartyMemberRepository.findByBossPartyIdAndCharacterMemberEmail(partyId, userEmail)
+            ?: throw AccessDeniedException("파티 멤버가 아닙니다.")
+
+        if (leader.role != PartyRole.LEADER) {
+            throw AccessDeniedException("방장만 알람을 삭제할 수 있습니다.")
+        }
+
+        // 2. 알람 조회
+        val alarm = bossPartyAlarmTimeRepository.findByIdOrNull(alarmId)
+            ?: throw IllegalArgumentException("존재하지 않는 알람입니다.")
+
+        if (alarm.bossPartyId != partyId) {
+            throw IllegalArgumentException("해당 파티의 알람이 아닙니다.")
+        }
+
+        // 3. 물리적 삭제 대신 상태 변경 (Soft Delete)
+        // isSent를 true로 만들면 리스트 조회(findBy...AndIsSentFalse)에서도 자동으로 제외됩니다.
+        alarm.isSent = true
+
+        println("🗑️ 알람 논리 삭제 완료: ID $alarmId (isSent set to true)")
+    }
+
+    @Transactional
+    fun getBossPartyAlarmTimes(bossPartyId: Long): List<BossPartyAlarmTimeResponse> {
+        val alarmTimes = bossPartyAlarmTimeRepository.findByBossPartyIdAndIsSentFalseOrderByAlarmTimeAsc(bossPartyId)
 
         return alarmTimes.map {
             BossPartyAlarmTimeResponse(
                 id = it.id,
                 alarmTime = it.alarmTime,
                 message = it.message,
-                isSent = it.isSent
+                isSent = it.isSent,
+                registrationMode = it.registrationMode
             )
         }
     }
@@ -184,7 +387,7 @@ class BossPartyService(
     @Transactional
     fun getAcceptedMembersByBossPartyId(bossPartyId: Long): List<BossPartyMemberResponse> {
 
-        val bossPartyMembers = bossPartyMemberRepository.findAllByBossPartyIdAndJoinStatus(
+        val bossPartyMembers = bossPartyMemberRepository.findAllWithMemberAndTokensByPartyId(
             bossPartyId,
             JoinStatus.ACCEPTED // 수락 상태만 조회
         )
