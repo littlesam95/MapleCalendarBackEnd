@@ -37,6 +37,9 @@ class BossPartyChatMessage(
     @Column(name = "message_type", nullable = false)
     var messageType: BossPartyChatMessageType, // TALK, JOIN, LEAVE 등을 구분하는 ENUM
 
+    @Column(nullable = false)
+    var isHidden: Boolean = false,
+
     @Column(name = "is_deleted", nullable = false)
     var isDeleted: Boolean = false, // 삭제 여부 플래그 추가
 
@@ -48,5 +51,9 @@ class BossPartyChatMessage(
     fun markAsDeleted() {
         this.isDeleted = true
         this.content = "이 메시지는 삭제되었어요."
+    }
+
+    fun hide() {
+        this.isHidden = true
     }
 }

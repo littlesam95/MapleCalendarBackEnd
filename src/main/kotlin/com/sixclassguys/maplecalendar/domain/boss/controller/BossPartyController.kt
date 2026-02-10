@@ -170,6 +170,21 @@ class BossPartyController(
         return ResponseEntity.ok(response)
     }
 
+    @PatchMapping("/{bossPartyId}/chat-messages/{messageId}")
+    fun hideMessage(
+        @AuthenticationPrincipal userDetails: UserDetails, // Spring Security 인증 정보
+        @PathVariable bossPartyId: Long,
+        @PathVariable messageId: Long
+    ): ResponseEntity<Unit> {
+        // 1. DB 상태 변경 (isDeleted = true)
+        val hiddenMessage = bossPartyService.hideChatMessage(bossPartyId, messageId, userDetails.username)
+
+        // 2. WebSocket으로 모든 파티원에게 "메시지 상태 변경" 알림 전송
+        webSocketHandler.broadcastHide(hiddenMessage.bossParty.id, hiddenMessage)
+
+        return ResponseEntity.ok().build()
+    }
+
     @DeleteMapping("/{bossPartyId}/chat-messages/{messageId}")
     fun deleteMessage(
         @AuthenticationPrincipal userDetails: UserDetails, // Spring Security 인증 정보
