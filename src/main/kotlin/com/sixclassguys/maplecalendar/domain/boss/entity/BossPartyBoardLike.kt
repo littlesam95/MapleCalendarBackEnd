@@ -1,6 +1,7 @@
 package com.sixclassguys.maplecalendar.domain.boss.entity
 
 import com.sixclassguys.maplecalendar.domain.boss.enums.BoardLikeType
+import com.sixclassguys.maplecalendar.domain.character.entity.MapleCharacter
 import jakarta.persistence.*
 import java.time.LocalDateTime
 
@@ -9,7 +10,7 @@ import java.time.LocalDateTime
     name = "boss_party_board_like",
     uniqueConstraints = [
         UniqueConstraint(
-            columnNames = ["boss_party_board_id", "member_id"]
+            columnNames = ["boss_party_board_id", "character_id"]
         )
     ]
 )
@@ -23,12 +24,13 @@ class BossPartyBoardLike(
     @JoinColumn(name = "boss_party_board_id", nullable = false)
     val bossPartyBoard: BossPartyBoard,
 
-    @Column(nullable = false)
-    val memberId: Long,
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "character_id", nullable = false)
+    val character: MapleCharacter,
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    val boardLikeType: BoardLikeType,
+    var boardLikeType: BoardLikeType,
 
     @Column(nullable = false)
     val createdAt: LocalDateTime = LocalDateTime.now()
