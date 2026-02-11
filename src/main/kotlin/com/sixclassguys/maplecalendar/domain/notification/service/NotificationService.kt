@@ -13,7 +13,6 @@ import com.sixclassguys.maplecalendar.domain.boss.repository.BossPartyMemberRepo
 import com.sixclassguys.maplecalendar.domain.boss.repository.BossPartyRepository
 import com.sixclassguys.maplecalendar.domain.boss.repository.MemberBossPartyMappingRepository
 import com.sixclassguys.maplecalendar.domain.eventalarm.repository.EventAlarmTimeRepository
-import com.sixclassguys.maplecalendar.domain.eventalarm.repository.EventAlarmRepository
 import com.sixclassguys.maplecalendar.domain.member.entity.Member
 import com.sixclassguys.maplecalendar.domain.member.repository.MemberRepository
 import com.sixclassguys.maplecalendar.domain.notification.dto.FcmTokenRequest
@@ -44,8 +43,7 @@ class NotificationService(
     private val memberBossPartyMappingRepository: MemberBossPartyMappingRepository,
     private val eventRepository: EventRepository,
     private val memberRepository: MemberRepository,
-    private val alarmProducer: AlarmProducer,
-    private val eventAlarmRepository: EventAlarmRepository
+    private val alarmProducer: AlarmProducer
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -53,10 +51,30 @@ class NotificationService(
     @Transactional
     fun processAlarm(alarm: RedisAlarmDto) {
         when (alarm.type) {
-            AlarmType.EVENT -> { /* 추후 이벤트 알람 발송 추가 */}
+            AlarmType.EVENT -> processEventAlarm(alarm)
             AlarmType.BOSS -> processBossPartyAlarm(alarm)
             else -> {}
         }
+    }
+
+    @Transactional
+    fun processEventAlarm(alarm: RedisAlarmDto) {
+        // 1. 유효성 검사 (알람이 꺼져있거나 이미 발송되었는지 체크)
+        if (!checkEventAlarmValid(alarm.targetId) || isAlarmCancelled(alarm)) {
+            log.info("🚫 취소되었거나 유효하지 않은 이벤트 알람입니다. targetId=${alarm.targetId}")
+            return
+        }
+
+        // 2. 대상 유저 조회
+        val member = memberRepository.findByIdOrNull(alarm.memberId)
+            ?: return
+
+        // 3. FCM 발송
+        sendFcmPush(member, alarm)
+
+        // 4. 발송 완료 처리
+        markAsSent(alarm)
+        log.info("🎁 이벤트 알람 발송 완료: 유저=${member.id}, targetId=${alarm.targetId}")
     }
 
     @Transactional
@@ -232,63 +250,6 @@ class NotificationService(
         }
     }
 
-//    private fun sendFcmMessage(alarmSetting: EventAlarm) {
-//        val member = alarmSetting.member
-//        val event = alarmSetting.event
-//
-//        val tokensFromDb = member.id?.let { notificationTokenRepository.findAllByMemberId(it) }
-//        tokensFromDb?.let { log.info("📢 [검증] 유저 ID: ${member.id}, DB에 등록된 실제 토큰 개수: ${it.size}") }
-//
-//        // 💡 남은 일수 계산
-//        val daysLeft = ChronoUnit.DAYS.between(LocalDate.now(), event.endDate.toLocalDate())
-//        val dDayText = when {
-//            daysLeft > 0L -> "${daysLeft}일 남았습니다!"
-//            daysLeft == 0L -> "오늘 종료됩니다! 서두르세요!"
-//            else -> "종료되었습니다."
-//        }
-//
-//        member.tokens.forEach { tokenEntity ->
-//            val message = Message.builder()
-//                .setToken(tokenEntity.token)
-//                .setNotification(
-//                    Notification.builder()
-//                        .setTitle("⏰ 설정하신 알림 시간입니다!")
-//                        .setBody("[${event.title}] $dDayText") // 💡 남은 기간 표시
-//                        .build()
-//                )
-//                .putData("eventId", event.id.toString())
-//                .putData("type", "EVENT_ALARM")
-//                .build()
-//
-//            try {
-//                FirebaseMessaging.getInstance().send(message)
-//                log.info("개별 알람 발송 성공: 유저=${member.id}, 이벤트=${event.id}")
-//            } catch (e: Exception) {
-//                log.error("푸시 실패: ${tokenEntity.token.take(10)}... - ${e.message}")
-//            }
-//        }
-//    }
-
-    fun registerToken(request: FcmTokenRequest, memberId: Long? = null) {
-        val existingToken = notificationTokenRepository.findByToken(request.token)
-        val member = memberId?.let { memberRepository.findByIdOrNull(it) }
-
-        if (existingToken != null) {
-            existingToken.platform = request.platform
-            existingToken.lastRegisteredAt = LocalDateTime.now()
-            // 💡 로그인 상태라면 토큰의 주인(Member)을 업데이트
-            if (member != null) existingToken.member = member
-        } else {
-            notificationTokenRepository.save(
-                NotificationToken(
-                    token = request.token,
-                    platform = request.platform,
-                    member = member // 💡 새 토큰 생성 시 멤버 연결
-                )
-            )
-        }
-    }
-
     fun sendEndingEventNotifications() {
         // 1. 오늘 종료되는 이벤트 조회
         val startOfToday = LocalDate.now().atStartOfDay()
@@ -339,33 +300,25 @@ class NotificationService(
         }
     }
 
-    /**
-     * 사용자가 개별 설정한 알람 시간에 맞춰 푸시 발송
-     * 스케줄러에 의해 매 분(1분 단위) 호출됨
-     */
-//    fun sendCustomEventNotifications() {
-//        val now = LocalDateTime.now().withSecond(0).withNano(0)
-//
-//        // 💡 쿼리 단계에서 isEnabled = true인 것만 가져오도록 수정 (Repository 쿼리 확인 필요)
-//        val activeAlarms = eventAlarmRepository.findAllToSendMessage(now)
-//
-//        activeAlarms.forEach { alarmSetting ->
-//            val targets = alarmSetting.alarmTimes.filter { it.alarmTime <= now && !it.isSent }
-//
-//            targets.forEach { target ->
-//                target.isSent = true
-//
-//                // 3. 💡 [조건부 발송]
-//                // - 알람 설정이 켜져 있고(isEnabled)
-//                // - 정확히 '현재 시각'에 해당하는 알람인 경우에만 실제로 발송
-//                if (alarmSetting.isEnabled && target.alarmTime == now) {
-//                    sendFcmMessage(alarmSetting) // 실제 FCM 발송 로직 분리
-//                } else if (target.alarmTime < now) {
-//                    log.info("과거 알람(시간: ${target.alarmTime})을 미발송 처리하고 완료 상태로 갱신합니다. 유저: ${alarmSetting.member.id}")
-//                }
-//            }
-//        }
-//    }
+    fun registerToken(request: FcmTokenRequest, memberId: Long? = null) {
+        val existingToken = notificationTokenRepository.findByToken(request.token)
+        val member = memberId?.let { memberRepository.findByIdOrNull(it) }
+
+        if (existingToken != null) {
+            existingToken.platform = request.platform
+            existingToken.lastRegisteredAt = LocalDateTime.now()
+            // 💡 로그인 상태라면 토큰의 주인(Member)을 업데이트
+            if (member != null) existingToken.member = member
+        } else {
+            notificationTokenRepository.save(
+                NotificationToken(
+                    token = request.token,
+                    platform = request.platform,
+                    member = member // 💡 새 토큰 생성 시 멤버 연결
+                )
+            )
+        }
+    }
 
 //    @Transactional
 //    fun unregisterToken(apiKey: String, token: String) {

@@ -33,10 +33,11 @@ class AlarmMigrationService(
                 alarmProducer.reserveAlarm(
                     RedisAlarmDto(
                         type = AlarmType.EVENT,
-                        targetId = time.id!!,
+                        targetId = time.id,
                         memberId = time.eventAlarm.member.id,
                         title = "⏰ 이벤트 알림",
-                        message = "[${time.eventAlarm.event.title}] 설정하신 알람 시간입니다!"
+                        message = "[${time.eventAlarm.event.title}] 설정하신 알람 시간입니다!",
+                        partyId = 0L,
                     ), time.alarmTime
                 )
             }

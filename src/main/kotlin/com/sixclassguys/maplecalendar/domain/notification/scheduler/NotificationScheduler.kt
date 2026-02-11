@@ -13,9 +13,4 @@ class NotificationScheduler(
     fun scheduleDailyNotification() {
         notificationService.sendEndingEventNotifications()
     }
-
-//    @Scheduled(cron = "0 * * * * *")
-//    fun scheduleCustomNotification() {
-//        notificationService.sendCustomEventNotifications()
-//    }
 }
