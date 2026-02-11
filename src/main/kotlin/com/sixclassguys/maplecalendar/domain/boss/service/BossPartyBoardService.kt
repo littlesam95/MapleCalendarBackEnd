@@ -1,9 +1,11 @@
 package com.sixclassguys.maplecalendar.domain.boss.service
 
 import com.sixclassguys.maplecalendar.domain.boss.dto.BossPartyBoardCreateRequest
+import com.sixclassguys.maplecalendar.domain.boss.dto.BossPartyBoardLikeRequest
 import com.sixclassguys.maplecalendar.domain.boss.dto.BossPartyBoardResponse
 import com.sixclassguys.maplecalendar.domain.boss.entity.BossPartyBoard
 import com.sixclassguys.maplecalendar.domain.boss.entity.BossPartyBoardImage
+import com.sixclassguys.maplecalendar.domain.boss.entity.BossPartyBoardLike
 import com.sixclassguys.maplecalendar.domain.boss.enums.BoardLikeType
 import com.sixclassguys.maplecalendar.domain.boss.repository.BossPartyBoardImageRepository
 import com.sixclassguys.maplecalendar.domain.boss.repository.BossPartyBoardLikeRepository
@@ -125,5 +127,43 @@ class BossPartyBoardService(
             userLikeType = userLike?.boardLikeType?.toString(),
             isAuthor = board.character.member.id == currentCharacterId
         )
+    }
+
+    /**
+     * 게시글에 좋아요/싫어요 토글
+     */
+    @Transactional
+    fun toggleBoardLike(
+        partyId: Long,
+        boardId: Long,
+        characterId: Long,
+        request: BossPartyBoardLikeRequest
+    ): BossPartyBoardResponse {
+        val board = bossPartyBoardRepository.findByIdAndBossPartyId(boardId, partyId)
+            ?: throw IllegalArgumentException("게시글을 찾을 수 없습니다.")
+
+        val character = mapleCharacterRepository.findById(characterId)
+            .orElseThrow { IllegalArgumentException("캐릭터를 찾을 수 없습니다.") }
+
+        // 기존 좋아요 확인
+        val existingLike = bossPartyBoardLikeRepository
+            .findByBossPartyBoardIdAndCharacterId(boardId, character.id)
+
+        if (existingLike != null) {
+            if (existingLike.boardLikeType == request.boardLikeType) {
+                bossPartyBoardLikeRepository.delete(existingLike)
+            } else {
+                existingLike.boardLikeType = request.boardLikeType
+            }
+        } else {
+            val newLike = BossPartyBoardLike(
+                bossPartyBoard = board,
+                character = character,
+                boardLikeType = request.boardLikeType
+            )
+            bossPartyBoardLikeRepository.save(newLike)
+        }
+
+        return buildBoardResponse(board, character.id)
     }
 }

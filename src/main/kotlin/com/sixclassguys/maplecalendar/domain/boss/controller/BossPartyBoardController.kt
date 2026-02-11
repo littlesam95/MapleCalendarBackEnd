@@ -2,7 +2,9 @@ package com.sixclassguys.maplecalendar.domain.boss.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.sixclassguys.maplecalendar.domain.boss.dto.BossPartyBoardCreateRequest
+import com.sixclassguys.maplecalendar.domain.boss.dto.BossPartyBoardLikeRequest
 import com.sixclassguys.maplecalendar.domain.boss.dto.BossPartyBoardResponse
+import com.sixclassguys.maplecalendar.domain.boss.enums.BoardLikeType
 import com.sixclassguys.maplecalendar.domain.boss.service.BossPartyBoardService
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.media.ArraySchema
@@ -85,5 +87,26 @@ class BossPartyBoardController(
         return ResponseEntity.status(HttpStatus.CREATED).body(response)
     }
 
+    @PutMapping("/{boardId}/like")
+    fun toggleBoardLike(
+        @PathVariable partyId: Long,
+        @PathVariable boardId: Long,
+        @RequestParam characterId: Long,
+        @RequestParam likeType: String
+    ): ResponseEntity<BossPartyBoardResponse> {
+        return try {
+            val likeEnum = try {
+                BoardLikeType.valueOf(likeType.uppercase())
+            } catch (e: IllegalArgumentException) {
+                return ResponseEntity.badRequest().build()
+            }
+
+            val request = BossPartyBoardLikeRequest(boardLikeType = likeEnum)
+            val response = boardService.toggleBoardLike(partyId, boardId, characterId, request)
+            ResponseEntity.ok(response)
+        } catch (e: Exception) {
+            ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build()
+        }
+    }
 
 }
