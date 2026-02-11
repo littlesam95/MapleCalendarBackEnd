@@ -37,7 +37,7 @@ class AlarmMigrationService(
                         memberId = time.eventAlarm.member.id,
                         title = "⏰ 이벤트 알림",
                         message = "[${time.eventAlarm.event.title}] 설정하신 알람 시간입니다!",
-                        partyId = 0L,
+                        contentId = 0L,
                     ), time.alarmTime
                 )
             }
@@ -51,7 +51,7 @@ class AlarmMigrationService(
                 val dto = RedisAlarmDto(
                     type = AlarmType.BOSS,
                     targetId = time.id,
-                    partyId = time.bossPartyId, // 수정된 필드 사용
+                    contentId = time.bossPartyId, // 수정된 필드 사용
                     memberId = 0L,              // 파티 단위 발송이므로 0 처리
                     title = "⚔️ 보스 파티 알림",
                     message = time.message

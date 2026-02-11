@@ -87,7 +87,7 @@ class NotificationService(
             return
         }
 
-        val partyId = alarm.partyId ?: return
+        val partyId = alarm.contentId
 
         // 1. 해당 파티의 승인된 멤버(ACCEPTED) 목록을 가져옴
         val members = bossPartyMemberRepository.findAllWithMemberAndTokensByPartyId(partyId, JoinStatus.ACCEPTED)
@@ -96,7 +96,7 @@ class NotificationService(
             val member = partyMember.character.member
 
             // 2. 개별 유저의 알람 설정(On/Off) 확인
-            val mapping = memberBossPartyMappingRepository.findByMemberIdAndBossPartyId(member.id, alarm.partyId)
+            val mapping = memberBossPartyMappingRepository.findByMemberIdAndBossPartyId(member.id, alarm.contentId)
 
             if (mapping?.isPartyAlarmEnabled == true) {
                 sendFcmPush(member, alarm) // 실제 발송
@@ -131,7 +131,7 @@ class NotificationService(
                         .setToken(tokenEntity.token)
                         // ✅ 채팅 알림은 푸시 팝업이 떠야 하므로 Data Payload 방식을 사용
                         .putData("type", "BOSSCHAT")
-                        .putData("partyId", partyId.toString())
+                        .putData("contentId", partyId.toString())
                         .putData("title", senderName)
                         .putData("body", content)
                         .build()
@@ -205,7 +205,7 @@ class NotificationService(
                 )
                 .putData("type", alarm.type.name)
                 .putData("targetId", alarm.targetId.toString())
-                .putData("partyId", alarm.partyId.toString()) // 추가 정보가 있다면 포함
+                .putData("contentId", alarm.contentId.toString()) // 추가 정보가 있다면 포함
                 .build()
 
             try {

@@ -70,7 +70,7 @@ class AlarmService(
                 type = AlarmType.EVENT,
                 targetId = newTime.id, // 💡 이제 무조건 DB 할당 ID가 들어감
                 memberId = member.id,
-                partyId = 0L,
+                contentId = newTime.eventAlarm.event.id,
                 title = "⏰ 설정하신 이벤트 알림 시간이에요!",
                 message = "[${event.title}] $dDayText"
             )
