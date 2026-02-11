@@ -576,4 +576,179 @@ class BossPartyService(
 
         return message
     }
+
+    @Transactional
+    fun inviteMember(partyId: Long, inviteeId: Long, userEmail: String) {
+//        val bossParty = bossPartyRepository.findById(partyId).orElseThrow { AccessDeniedException("존재하지 않거나 삭제된 파티입니다.") }
+        val bossParty = bossPartyRepository.findByIdAndIsDeletedFalse(partyId)
+            ?: throw IllegalStateException("존재하지 않거나 삭제된 파티입니다.")
+
+        val character =  mapleCharacterRepository.findById(inviteeId).orElseThrow { AccessDeniedException("캐릭터 정보가 없습니다.") }
+
+        if (character.member.email == userEmail) {
+            throw IllegalStateException("자기 자신의 캐릭터를 초대할 수 없습니다.")
+        }
+
+        val leader = bossPartyMemberRepository
+            .findByBossPartyIdAndCharacterMemberEmailAndRole(partyId, userEmail, PartyRole.LEADER)
+            ?: throw AccessDeniedException("초대 권한이 없습니다.")
+
+        val exists = bossPartyMemberRepository.findByBossPartyIdAndCharacterId(partyId, inviteeId)
+        if (exists != null) throw IllegalStateException("이미 초대되었거나 참여 중입니다")
+
+        bossPartyMemberRepository.save(
+            BossPartyMember(
+                bossParty = bossParty,
+                character = character,
+                role = PartyRole.MEMBER,
+                joinStatus = JoinStatus.INVITED
+            )
+        )
+    }
+
+    // 초대 수락
+    @Transactional
+    fun acceptInvitation(partyId: Long, characterId: Long, userEmail: String) {
+        val bossParty = bossPartyRepository.findByIdAndIsDeletedFalse(partyId)
+            ?: throw IllegalStateException("존재하지 않거나 삭제된 파티입니다.")
+
+        val invitee = bossPartyMemberRepository.findByBossPartyIdAndCharacterMemberEmail(partyId, userEmail)
+            ?: throw AccessDeniedException("파티 멤버가 아닙니다.")
+
+        if(invitee.character.id != characterId){
+            throw AccessDeniedException("본인만 수락할 수 있습니다.")
+        }
+
+        when (invitee.joinStatus) {
+            JoinStatus.INVITED -> invitee.joinStatus = JoinStatus.ACCEPTED
+            JoinStatus.ACCEPTED -> throw IllegalStateException("이미 수락된 상태입니다")
+            else -> throw IllegalStateException("알 수 없는 상태입니다")
+        }
+    }
+
+    // 초대 거절
+    @Transactional
+    fun declineInvitation(partyId: Long, characterId: Long, userEmail: String) {
+        val bossParty = bossPartyRepository.findByIdAndIsDeletedFalse(partyId)
+            ?: throw IllegalStateException("존재하지 않거나 삭제된 파티입니다.")
+
+        val bpm = bossPartyMemberRepository.findByBossPartyIdAndCharacterMemberEmail(partyId, userEmail)
+            ?: throw AccessDeniedException("파티 멤버가 아닙니다.")
+
+        if(bpm.character.id != characterId){
+            throw AccessDeniedException("본인만 거절할 수 있습니다.")
+        }
+
+        if (bpm.joinStatus != JoinStatus.INVITED) {
+            throw IllegalStateException("거절할 수 없는 상태입니다")
+        }
+
+        bossPartyMemberRepository.delete(bpm)
+    }
+
+    // 추방
+    @Transactional
+    fun kickMember(partyId: Long, characterId: Long, userEmail: String) {
+        val bossParty = bossPartyRepository.findByIdAndIsDeletedFalse(partyId)
+            ?: throw IllegalStateException("존재하지 않거나 삭제된 파티입니다.")
+
+        val leader = bossPartyMemberRepository
+            .findByBossPartyIdAndCharacterMemberEmailAndRole(
+                partyId,
+                userEmail,
+                PartyRole.LEADER
+            )
+            ?: throw AccessDeniedException("추방 권한이 없습니다")
+
+        val target = bossPartyMemberRepository
+            .findByBossPartyIdAndCharacterId(partyId, characterId)
+            ?: throw IllegalStateException("대상 멤버가 없습니다")
+
+        if (target.role == PartyRole.LEADER) {
+            throw IllegalStateException("파티장은 추방할 수 없습니다")
+        }
+
+        bossPartyMemberRepository.delete(target)
+    }
+
+    // 탈퇴
+    @Transactional
+    fun leaveParty(partyId: Long, characterId: Long, userEmail: String) {
+        val bossParty = bossPartyRepository.findByIdAndIsDeletedFalse(partyId)
+            ?: throw IllegalStateException("존재하지 않거나 삭제된 파티입니다.")
+
+//        val bossParty = bossPartyRepository.findById(partyId)
+//            .orElseThrow { IllegalStateException("파티가 존재하지 않습니다.") }
+
+        val bpm = bossPartyMemberRepository
+            .findByBossPartyIdAndCharacterMemberEmail(partyId, userEmail)
+            ?: throw AccessDeniedException("파티 멤버가 아닙니다.")
+
+        if (bpm.character.id != characterId) {
+            throw AccessDeniedException("본인만 탈퇴할 수 있습니다.")
+        }
+
+        // ACCEPTED 멤버 수만 카운트 (초대 상태 제외)
+        val acceptedMembers = bossPartyMemberRepository
+            .findAllByBossPartyId(partyId)
+            .filter { it.joinStatus == JoinStatus.ACCEPTED }
+
+        val acceptedCount = acceptedMembers.size
+
+        // 1명만 남은 경우 → 파티 논리 삭제
+        if (acceptedCount == 1) {
+            bossParty.isDeleted = true
+            bossPartyRepository.save(bossParty) // <-- 명시적 저장
+            bossPartyMemberRepository.delete(bpm)
+            return
+        }
+
+        // 리더가 탈퇴하는 경우 → 자동 위임
+        if (bpm.role == PartyRole.LEADER) {
+
+            val newLeader = acceptedMembers
+                .firstOrNull { it.character.id != characterId }
+                ?: throw IllegalStateException("양도할 멤버가 없습니다.")
+
+            newLeader.role = PartyRole.LEADER
+        }
+
+        // 본인 삭제
+        bossPartyMemberRepository.delete(bpm)
+    }
+
+    // 파티장 양도
+    @Transactional
+    fun transferLeader(partyId: Long, targetCharacterId: Long, userEmail: String) {
+        val bossParty = bossPartyRepository.findByIdAndIsDeletedFalse(partyId)
+            ?: throw IllegalStateException("존재하지 않거나 삭제된 파티입니다.")
+
+        // 현재 리더 조회
+        val currentLeader = bossPartyMemberRepository
+            .findByBossPartyIdAndCharacterMemberEmailAndRole(
+                partyId,
+                userEmail,
+                PartyRole.LEADER
+            )
+            ?: throw AccessDeniedException("파티장만 권한을 양도할 수 있습니다.")
+
+        // 자기 자신에게 양도 방지
+        if (currentLeader.character.id == targetCharacterId) {
+            throw IllegalStateException("자기 자신에게는 양도할 수 없습니다.")
+        }
+
+        // 대상 멤버 조회
+        val targetMember = bossPartyMemberRepository
+            .findByBossPartyIdAndCharacterId(partyId, targetCharacterId)
+            ?: throw IllegalStateException("해당 캐릭터는 파티 멤버가 아닙니다.")
+
+        // 초대 상태 체크
+        if (targetMember.joinStatus != JoinStatus.ACCEPTED) {
+            throw IllegalStateException("수락된 멤버에게만 양도할 수 있습니다.")
+        }
+
+        // 역할 변경
+        currentLeader.role = PartyRole.MEMBER
+        targetMember.role = PartyRole.LEADER
+    }
 }

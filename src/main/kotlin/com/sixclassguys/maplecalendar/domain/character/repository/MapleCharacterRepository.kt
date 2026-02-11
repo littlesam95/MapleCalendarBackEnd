@@ -5,6 +5,7 @@ import com.sixclassguys.maplecalendar.domain.member.entity.Member
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Query
 import org.springframework.stereotype.Repository
+import org.springframework.data.repository.query.Param
 
 @Repository
 interface MapleCharacterRepository : JpaRepository<MapleCharacter, Long> {
@@ -32,4 +33,16 @@ interface MapleCharacterRepository : JpaRepository<MapleCharacter, Long> {
     // 유저의 이메일로 현재 활성화된(isActive) 캐릭터 하나를 찾는 쿼리
     @Query("select c from MapleCharacter c where c.member.email = :email and c.isActive = true")
     fun findFirstByMemberEmailAndIsActiveTrue(email: String): MapleCharacter?
+
+    // 캐릭터 이름에 포함된 모든 캐릭터 조회 (대소문자 무시)
+    @Query("""
+        SELECT c 
+        FROM MapleCharacter c
+        JOIN FETCH c.member m
+        WHERE LOWER(c.characterName) LIKE LOWER(CONCAT('%', :namePart, '%'))
+        AND c.isActive = true
+    """)
+    fun findAllByCharacterNameContainingIgnoreCase(
+        @Param("namePart") namePart: String
+    ): List<MapleCharacter>
 }

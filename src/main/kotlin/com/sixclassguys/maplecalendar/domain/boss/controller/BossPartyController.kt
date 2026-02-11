@@ -14,6 +14,8 @@ import com.sixclassguys.maplecalendar.domain.boss.handler.BossPartyChatWebSocket
 import com.sixclassguys.maplecalendar.domain.boss.service.BossPartyService
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
+import io.swagger.v3.oas.annotations.responses.ApiResponse
+import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
 import org.springframework.data.domain.Slice
@@ -219,6 +221,109 @@ class BossPartyController(
         // 2. WebSocket으로 모든 파티원에게 "메시지 상태 변경" 알림 전송
         webSocketHandler.broadcastDelete(deletedMessage.bossParty.id, messageId)
 
+        return ResponseEntity.ok().build()
+    }
+
+    @Operation(summary = "파티 멤버 초대", description = "특정 캐릭터를 파티에 초대합니다. 리더만 호출 가능")
+    @ApiResponses(
+        ApiResponse(responseCode = "200", description = "초대 성공"),
+        ApiResponse(responseCode = "403", description = "권한 없음"),
+        ApiResponse(responseCode = "400", description = "잘못된 요청")
+    )
+    @PostMapping("/{bossPartyId}/invite")
+    fun inviteMember(
+        @AuthenticationPrincipal
+        @Parameter(description = "인증된 사용자 이메일", required = true)
+        userDetails: UserDetails,
+
+        @PathVariable
+        @Parameter(description = "초대할 파티 ID", required = true)
+        bossPartyId: Long,
+
+        @RequestParam
+        @Parameter(description = "초대할 캐릭터 ID", required = true)
+        characterId: Long
+    ): ResponseEntity<Unit> {
+        bossPartyService.inviteMember(
+            partyId = bossPartyId,
+            inviteeId = characterId,
+            userEmail = userDetails.username
+        )
+        return ResponseEntity.ok().build()
+    }
+
+    @Operation(summary = "파티 초대 수락", description = "초대받은 파티를 수락합니다")
+    @PostMapping("/{bossPartyId}/accept")
+    fun acceptInvitation(
+        @AuthenticationPrincipal userDetails: UserDetails,
+        @PathVariable bossPartyId: Long,
+        @RequestParam characterId: Long
+    ): ResponseEntity<Unit> {
+        bossPartyService.acceptInvitation(
+            partyId = bossPartyId,
+            characterId = characterId,
+            userEmail = userDetails.username
+        )
+        return ResponseEntity.ok().build()
+    }
+
+    @Operation(summary = "파티 초대 거절", description = "초대받은 파티를 거절합니다")
+    @DeleteMapping("/{bossPartyId}/decline")
+    fun declineInvitation(
+        @AuthenticationPrincipal userDetails: UserDetails,
+        @PathVariable bossPartyId: Long,
+        @RequestParam characterId: Long
+    ): ResponseEntity<Unit> {
+        bossPartyService.declineInvitation(
+            partyId = bossPartyId,
+            characterId = characterId,
+            userEmail = userDetails.username
+        )
+        return ResponseEntity.ok().build()
+    }
+
+    @Operation(summary = "파티 멤버 추방", description = "리더가 멤버를 파티에서 추방합니다")
+    @DeleteMapping("/{bossPartyId}/members/{characterId}")
+    fun kickMember(
+        @AuthenticationPrincipal userDetails: UserDetails,
+        @PathVariable bossPartyId: Long,
+        @PathVariable characterId: Long
+    ): ResponseEntity<Unit> {
+        bossPartyService.kickMember(
+            partyId = bossPartyId,
+            characterId = characterId,
+            userEmail = userDetails.username
+        )
+        return ResponseEntity.ok().build()
+    }
+
+    @Operation(summary = "파티 탈퇴", description = "본인이 파티에서 탈퇴합니다")
+    @DeleteMapping("/{bossPartyId}/leave")
+    fun leaveParty(
+        @AuthenticationPrincipal userDetails: UserDetails,
+        @PathVariable bossPartyId: Long,
+        @RequestParam characterId: Long
+    ): ResponseEntity<Unit> {
+        bossPartyService.leaveParty(
+            partyId = bossPartyId,
+            characterId = characterId,
+            userEmail = userDetails.username
+        )
+        return ResponseEntity.ok().build()
+    }
+
+    @Operation(summary = "파티장 양도", description = "리더가 다른 멤버에게 파티장 권한을 양도합니다")
+    @PatchMapping("/{bossPartyId}/transfer")
+    fun transferLeader(
+        @AuthenticationPrincipal userDetails: UserDetails,
+        @PathVariable bossPartyId: Long,
+        @RequestParam targetCharacterId: Long
+    ): ResponseEntity<Unit> {
+        bossPartyService.transferLeader(
+            partyId = bossPartyId,
+            targetCharacterId = targetCharacterId,
+            userEmail = userDetails.username
+        )
         return ResponseEntity.ok().build()
     }
 }

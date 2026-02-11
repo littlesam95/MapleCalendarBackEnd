@@ -14,7 +14,7 @@ interface BossPartyRepository : JpaRepository<BossParty, Long>{
         FROM BossParty bp
         JOIN MemberBossPartyMapping mbpm
             ON bp.id = mbpm.bossPartyId
-        WHERE mbpm.memberId = :memberId
+        WHERE mbpm.memberId = :memberId AND bp.isDeleted = false
     """)
     fun findAllByMemberId(memberId: Long): List<BossParty>
 
@@ -22,10 +22,10 @@ interface BossPartyRepository : JpaRepository<BossParty, Long>{
     SELECT p, bm, m.isPartyAlarmEnabled, m.isChatAlarmEnabled
     FROM BossParty p
     JOIN FETCH p.members pm
-    JOIN FETCH pm.character ㅊ
+    JOIN FETCH pm.character c
     JOIN MemberBossPartyMapping m ON p.id = m.bossPartyId
     JOIN BossPartyMember bm ON p.id = bm.bossParty.id
-    WHERE m.memberId = :memberId AND bm.character.member.id = :memberId
+    WHERE m.memberId = :memberId AND bm.character.member.id = :memberId AND p.isDeleted = false
 """)
     fun findAllPartiesByMemberId(@Param("memberId") memberId: Long): List<Array<Any>>
 
@@ -34,7 +34,9 @@ interface BossPartyRepository : JpaRepository<BossParty, Long>{
         FROM BossParty p 
         JOIN FETCH p.members m 
         JOIN FETCH m.character c 
-        WHERE p.id = :partyId
+        WHERE p.id = :partyId AND p.isDeleted = false
     """)
     fun findDetailById(@Param("partyId") partyId: Long): BossParty?
+
+    fun findByIdAndIsDeletedFalse(id: Long): BossParty?
 }

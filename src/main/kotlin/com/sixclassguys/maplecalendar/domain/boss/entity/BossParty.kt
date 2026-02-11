@@ -5,9 +5,14 @@ import com.sixclassguys.maplecalendar.domain.boss.enums.BossType
 import jakarta.persistence.*
 import java.time.DayOfWeek
 import java.time.LocalDateTime
+import org.hibernate.annotations.SQLDelete
+import org.hibernate.annotations.SQLRestriction
+
 
 @Entity
 @Table(name = "boss_party")
+@SQLDelete(sql = "UPDATE boss_party SET is_deleted = true WHERE id = ?")
+@SQLRestriction("is_deleted = false")
 class BossParty(
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     val id: Long = 0,
@@ -46,4 +51,7 @@ class BossParty(
 
     @Column(name = "updated_at")
     var updatedAt: LocalDateTime = LocalDateTime.now(),
+
+    @Column(name = "is_deleted", nullable = false)
+    var isDeleted: Boolean = false
 )
