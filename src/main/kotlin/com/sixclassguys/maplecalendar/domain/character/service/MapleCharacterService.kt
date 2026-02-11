@@ -318,4 +318,27 @@ class MapleCharacterService(
         )
         mapleCharacterRepository.save(newCharacter)
     }
+
+    // 캐릭터 이름으로 관련 db에 저장된 캐릭터 이름 들어간 캐릭터 찾기
+    fun searchCharactersByName(namePart: String): MapleCharacterListResponse {
+        val characters = mapleCharacterRepository.findAllByCharacterNameContainingIgnoreCase(namePart)
+
+        // CharacterSummaryResponse로 매핑
+        val summaries = characters.map { c ->
+            CharacterSummaryResponse(
+                id = c.id,
+                ocid = c.ocid,
+                characterName = c.characterName,
+                characterLevel = c.characterLevel,
+                characterClass = c.characterClass,
+                characterImage = c.characterImage,
+                isRepresentativeCharacter = false // 대표 캐릭터 여부를 DB에서 가져오면 바꿀 수 있음
+            )
+        }
+
+        // 예시: 월드별로 그룹화
+        val grouped = summaries.groupBy { it.characterName } // 필요하면 다른 기준으로 변경 가능
+
+        return MapleCharacterListResponse(groupedCharacters = grouped)
+    }
 }
