@@ -9,6 +9,7 @@ import com.sixclassguys.maplecalendar.domain.boss.dto.BossPartyCreateResponse
 import com.sixclassguys.maplecalendar.domain.boss.dto.BossPartyDetailResponse
 import com.sixclassguys.maplecalendar.domain.boss.dto.BossPartyMemberResponse
 import com.sixclassguys.maplecalendar.domain.boss.dto.BossPartyResponse
+import com.sixclassguys.maplecalendar.domain.boss.dto.BossPartyScheduleResponse
 import com.sixclassguys.maplecalendar.domain.boss.handler.BossPartyChatWebSocketHandler
 import com.sixclassguys.maplecalendar.domain.boss.service.BossPartyService
 import io.swagger.v3.oas.annotations.Operation
@@ -65,6 +66,18 @@ class BossPartyController(
         val bossPartyDetail = bossPartyService.getBossPartyDetail(bossPartyId, userDetails.username)
 
         return ResponseEntity.ok(bossPartyDetail)
+    }
+
+    @GetMapping("/schedules")
+    fun getBossPartySchedules(
+        @AuthenticationPrincipal userDetails: UserDetails,
+        @RequestParam year: Int,
+        @RequestParam month: Int,
+        @RequestParam day: Int
+    ): ResponseEntity<List<BossPartyScheduleResponse>> {
+        val response = bossPartyService.getDailyBossSchedules(year, month, day, userDetails.username)
+
+        return ResponseEntity.ok(response)
     }
 
     @Operation(

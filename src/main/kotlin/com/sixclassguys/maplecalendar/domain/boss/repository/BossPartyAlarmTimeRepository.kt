@@ -34,7 +34,21 @@ interface BossPartyAlarmTimeRepository : JpaRepository<BossPartyAlarmTime, Long>
         @Param("now") now: LocalDateTime = LocalDateTime.now()
     )
 
-    // 2. 중복 예약 방지를 위한 존재 확인
-    // 같은 시간에 이미 알람이 있는지 확인 (SELECT, PERIODIC 구분 없이 체크)
+    @Query("""
+        SELECT DISTINCT bpat 
+        FROM BossPartyAlarmTime bpat
+        JOIN MemberBossPartyMapping mbpm ON bpat.bossPartyId = mbpm.bossPartyId
+        WHERE mbpm.memberId = :memberId
+          AND mbpm.isPartyAlarmEnabled = true
+          AND bpat.alarmTime >= :startDateTime
+          AND bpat.alarmTime <= :endDateTime
+        ORDER BY bpat.alarmTime ASC
+    """)
+    fun findMemberSchedules(
+        @Param("memberId") memberId: Long,
+        @Param("startDateTime") startDateTime: LocalDateTime,
+        @Param("endDateTime") endDateTime: LocalDateTime
+    ): List<BossPartyAlarmTime>
+
     fun existsByBossPartyIdAndAlarmTime(bossPartyId: Long, alarmTime: LocalDateTime): Boolean
 }

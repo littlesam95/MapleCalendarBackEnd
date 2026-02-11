@@ -10,6 +10,7 @@ import com.sixclassguys.maplecalendar.domain.boss.repository.BossPartyBoardRepos
 import com.sixclassguys.maplecalendar.domain.boss.dto.BossPartyChatMessageResponse
 import com.sixclassguys.maplecalendar.domain.boss.dto.BossPartyDetailResponse
 import com.sixclassguys.maplecalendar.domain.boss.dto.BossPartyMemberDetail
+import com.sixclassguys.maplecalendar.domain.boss.dto.BossPartyScheduleResponse
 import com.sixclassguys.maplecalendar.domain.boss.dto.toResponse
 import com.sixclassguys.maplecalendar.domain.boss.entity.BossParty
 import com.sixclassguys.maplecalendar.domain.boss.entity.BossPartyAlarmTime
@@ -46,6 +47,8 @@ import org.springframework.transaction.annotation.Transactional
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 import java.time.temporal.TemporalAdjusters
 
 @Service
@@ -197,6 +200,57 @@ class BossPartyService(
             alarmMessage = party.alarmMessage,
             createdAt = party.createdAt
         )
+    }
+
+    @Transactional(readOnly = true)
+    fun getDailyBossSchedules(year: Int, month: Int, day: Int, userEmail: String): List<BossPartyScheduleResponse> {
+        val member = memberRepository.findByEmail(userEmail)
+            ?: throw MemberNotFoundException()
+
+        val startTime = LocalDateTime.of(year, month, day, 0, 0)
+        val endTime = LocalDateTime.of(year, month, day, 23, 59)
+
+        val alarms = bossPartyAlarmTimeRepository.findMemberSchedules(member.id, startTime, endTime)
+
+        // 같은 파티인데 알람이 여러 번 등록된 경우 중복 제거 (partyId 기준)
+        val uniquePartyIds = alarms.map { it.bossPartyId }.distinct()
+
+        if (uniquePartyIds.isEmpty()) return emptyList()
+
+        // 1. 모든 파티 정보를 한 번에 가져오기
+        val parties = bossPartyRepository.findAllById(uniquePartyIds)
+
+        // 2. [핵심] 모든 파티의 멤버들을 한 번의 쿼리로 가져오기 (Repository에 메서드 추가 필요)
+        val allMembers = bossPartyMemberRepository.findAllWithMemberByPartyIds(uniquePartyIds, JoinStatus.ACCEPTED)
+
+        // 3. 파티 ID별로 멤버들을 그룹화 (메모리에서 처리)
+        val membersByPartyId = allMembers.groupBy { it.bossParty.id }
+
+        val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+
+        return parties.map { party ->
+            val membersInThisParty = membersByPartyId[party.id]?.map { member ->
+                BossPartyMemberDetail(
+                    characterId = member.character.id,
+                    characterName = member.character.characterName,
+                    worldName = member.character.worldName,
+                    characterClass = member.character.characterClass,
+                    characterLevel = member.character.characterLevel,
+                    characterImage = member.character.characterImage ?: "",
+                    role = member.role,
+                    isMyCharacter = member.character.member.id == member.id,
+                    joinedAt = member.joinedAt.toString()
+                )
+            }?.sortedByDescending { it.role == PartyRole.LEADER } ?: emptyList()
+
+            BossPartyScheduleResponse(
+                bossPartyId = party.id,
+                boss = party.boss,
+                bossDifficulty = party.difficulty,
+                members = membersInThisParty, // 그룹화된 맵에서 꺼내기
+                time = alarms.filter{ !it.isSent }.first { it.bossPartyId == party.id }.alarmTime.format(timeFormatter)
+            )
+        }
     }
 
     @Transactional
