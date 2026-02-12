@@ -19,6 +19,8 @@ import org.springframework.data.domain.Sort
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
+import org.springframework.security.core.annotation.AuthenticationPrincipal
+import org.springframework.security.core.userdetails.UserDetails
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.multipart.MultipartFile
 
@@ -33,13 +35,13 @@ class BossPartyBoardController(
     @Operation(summary = "게시판 게시글 목록 조회", description = "모든 게시글을 페이징으로 조회합니다.")
     @GetMapping
     fun getBoardPosts(
+        @AuthenticationPrincipal userDetails: UserDetails,
         @PathVariable partyId: Long,
-        @RequestParam characterId: Long,
         @RequestParam(defaultValue = "0") page: Int,
-        @RequestParam(defaultValue = "10") size: Int
+        @RequestParam(defaultValue = "5") size: Int
     ): ResponseEntity<Slice<BossPartyBoardResponse>> {
         val pageable = PageRequest.of(page, size, Sort.by("createdAt").descending())
-        val posts = boardService.getBoardPosts(partyId, characterId, pageable)
+        val posts = boardService.getBoardPosts(partyId, userDetails.username, pageable)
         return ResponseEntity.ok(posts)
     }
 
@@ -76,22 +78,22 @@ class BossPartyBoardController(
     )
     @PostMapping(consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
     fun createBoardPost(
+        @AuthenticationPrincipal userDetails: UserDetails,
         @PathVariable partyId: Long,
-        @RequestParam characterId: Long,
         @RequestPart("content") content: String,
         @RequestPart(value = "images", required = false) imageFiles: List<MultipartFile>?
     ): ResponseEntity<BossPartyBoardResponse> {
         val request = objectMapper.readValue(content, BossPartyBoardCreateRequest::class.java)
 
-        val response = boardService.createBoardPost(partyId, characterId, request, imageFiles)
+        val response = boardService.createBoardPost(partyId, userDetails.username, request, imageFiles)
         return ResponseEntity.status(HttpStatus.CREATED).body(response)
     }
 
     @PutMapping("/{boardId}/like")
     fun toggleBoardLike(
+        @AuthenticationPrincipal userDetails: UserDetails,
         @PathVariable partyId: Long,
         @PathVariable boardId: Long,
-        @RequestParam characterId: Long,
         @RequestParam likeType: String
     ): ResponseEntity<BossPartyBoardResponse> {
         return try {
@@ -102,7 +104,7 @@ class BossPartyBoardController(
             }
 
             val request = BossPartyBoardLikeRequest(boardLikeType = likeEnum)
-            val response = boardService.toggleBoardLike(partyId, boardId, characterId, request)
+            val response = boardService.toggleBoardLike(partyId, boardId, userDetails.username, request)
             ResponseEntity.ok(response)
         } catch (e: Exception) {
             ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build()

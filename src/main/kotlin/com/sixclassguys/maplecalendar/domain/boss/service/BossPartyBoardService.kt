@@ -7,11 +7,13 @@ import com.sixclassguys.maplecalendar.domain.boss.entity.BossPartyBoard
 import com.sixclassguys.maplecalendar.domain.boss.entity.BossPartyBoardImage
 import com.sixclassguys.maplecalendar.domain.boss.entity.BossPartyBoardLike
 import com.sixclassguys.maplecalendar.domain.boss.enums.BoardLikeType
+import com.sixclassguys.maplecalendar.domain.boss.enums.JoinStatus
 import com.sixclassguys.maplecalendar.domain.boss.repository.BossPartyBoardImageRepository
 import com.sixclassguys.maplecalendar.domain.boss.repository.BossPartyBoardLikeRepository
 import com.sixclassguys.maplecalendar.domain.boss.repository.BossPartyBoardRepository
+import com.sixclassguys.maplecalendar.domain.boss.repository.BossPartyMemberRepository
 import com.sixclassguys.maplecalendar.domain.boss.repository.BossPartyRepository
-import com.sixclassguys.maplecalendar.domain.character.repository.MapleCharacterRepository
+import com.sixclassguys.maplecalendar.global.exception.AccessDeniedException
 import com.sixclassguys.maplecalendar.global.exception.BossPartyNotFoundException
 import com.sixclassguys.maplecalendar.global.service.S3Service
 import org.springframework.data.domain.Pageable
@@ -23,10 +25,10 @@ import org.springframework.web.multipart.MultipartFile
 @Service
 class BossPartyBoardService(
     private val bossPartyRepository: BossPartyRepository,
+    private val bossPartyMemberRepository: BossPartyMemberRepository,
     private val bossPartyBoardRepository: BossPartyBoardRepository,
     private val bossPartyBoardImageRepository: BossPartyBoardImageRepository,
     private val bossPartyBoardLikeRepository: BossPartyBoardLikeRepository,
-    private val mapleCharacterRepository: MapleCharacterRepository,
     private val s3Service: S3Service
 ) {
 
@@ -36,17 +38,27 @@ class BossPartyBoardService(
     @Transactional(readOnly = true)
     fun getBoardPosts(
         partyId: Long,
-        characterId: Long,
+        userEmail: String,
         pageable: Pageable
     ): Slice<BossPartyBoardResponse> {
-        // 파티 존재 여부 확인
+        // 1. 파티 존재 여부 확인
         bossPartyRepository.findByIdAndIsDeletedFalse(partyId)
             ?: throw BossPartyNotFoundException()
 
+        // 2. 이 파티에 참여 중인 현재 유저의 캐릭터 식별
+        // (내가 좋아요를 눌렀는지, 내 글인지 판단하기 위함)
+        val partyMember = bossPartyMemberRepository
+            .findByBossPartyIdAndCharacterMemberEmail(partyId, userEmail)
+            ?: throw AccessDeniedException("파티 멤버만 게시글을 조회할 수 있습니다.")
+
+        val currentCharacterId = partyMember.character.id
+
+        // 3. 게시글 목록 조회
         val boards = bossPartyBoardRepository.findAllByBossPartyId(partyId, pageable)
 
+        // 4. 응답 빌드 (식별한 내 캐릭터 ID 전달)
         return boards.map { board ->
-            buildBoardResponse(board, characterId)
+            buildBoardResponse(board, currentCharacterId)
         }
     }
 
@@ -56,18 +68,26 @@ class BossPartyBoardService(
     @Transactional
     fun createBoardPost(
         partyId: Long,
-        characterId: Long,
+        userEmail: String, // 💡 characterId 대신 이메일 사용
         request: BossPartyBoardCreateRequest,
         imageFiles: List<MultipartFile>?
     ): BossPartyBoardResponse {
         val party = bossPartyRepository.findByIdAndIsDeletedFalse(partyId)
             ?: throw BossPartyNotFoundException()
 
-        // characterId로 직접 조회
-        val character = mapleCharacterRepository.findById(characterId)
-            .orElseThrow { IllegalArgumentException("캐릭터를 찾을 수 없습니다.") }
+        // 1. 해당 파티에 가입된(ACCEPTED) 이 사용자의 캐릭터 정보를 조회
+        val partyMember = bossPartyMemberRepository
+            .findByBossPartyIdAndCharacterMemberEmail(partyId, userEmail)
+            ?: throw AccessDeniedException("파티 멤버가 아닙니다.")
 
-        // 1. 게시글 생성
+        // 초대한 상태(INVITED)인 경우 글 작성을 막으려면 체크 추가
+        if (partyMember.joinStatus != JoinStatus.ACCEPTED) {
+            throw AccessDeniedException("파티 수락 후 게시글을 작성할 수 있습니다.")
+        }
+
+        val character = partyMember.character
+
+        // 2. 게시글 생성
         val board = BossPartyBoard(
             bossParty = party,
             character = character,
@@ -75,25 +95,17 @@ class BossPartyBoardService(
         )
         val savedBoard = bossPartyBoardRepository.save(board)
 
-        // 2. 이미지 업로드
+        // 3. 이미지 업로드 (S3)
         if (!imageFiles.isNullOrEmpty()) {
-            imageFiles.forEach { imageFile ->
-                if (!imageFile.isEmpty) {
-                    try {
-                        val imageUrl = s3Service.uploadFile(imageFile, "boss-party-board/$partyId")
-                        val boardImage = BossPartyBoardImage(
-                            bossPartyBoard = savedBoard,
-                            imageUrl = imageUrl
-                        )
-                        bossPartyBoardImageRepository.save(boardImage)
-                    } catch (e: Exception) {
-                        throw RuntimeException("이미지 업로드 실패: ${e.message}", e)
-                    }
-                }
+            imageFiles.filter { !it.isEmpty }.forEach { imageFile ->
+                val imageUrl = s3Service.uploadFile(imageFile, "boss-party-board/$partyId")
+                bossPartyBoardImageRepository.save(
+                    BossPartyBoardImage(bossPartyBoard = savedBoard, imageUrl = imageUrl)
+                )
             }
         }
 
-        return buildBoardResponse(savedBoard, character.member.id)
+        return buildBoardResponse(savedBoard, character.id)
     }
 
 
@@ -136,14 +148,17 @@ class BossPartyBoardService(
     fun toggleBoardLike(
         partyId: Long,
         boardId: Long,
-        characterId: Long,
+        userEmail: String,
         request: BossPartyBoardLikeRequest
     ): BossPartyBoardResponse {
         val board = bossPartyBoardRepository.findByIdAndBossPartyId(boardId, partyId)
             ?: throw IllegalArgumentException("게시글을 찾을 수 없습니다.")
 
-        val character = mapleCharacterRepository.findById(characterId)
-            .orElseThrow { IllegalArgumentException("캐릭터를 찾을 수 없습니다.") }
+        val partyMember = bossPartyMemberRepository
+            .findByBossPartyIdAndCharacterMemberEmail(partyId, userEmail)
+            ?: throw AccessDeniedException("파티 멤버만 좋아요를 누를 수 있습니다.")
+
+        val character = partyMember.character
 
         // 기존 좋아요 확인
         val existingLike = bossPartyBoardLikeRepository
