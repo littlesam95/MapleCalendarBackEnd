@@ -622,7 +622,7 @@ class BossPartyService(
 
         // 해당 유저(userEmail)가 이 파티(partyId)에 초대받은(INVITED) 이력이 있는지 조회
         // 만약 한 유저의 여러 캐릭터가 초대될 수 없는 구조라면 단건 조회가 적절합니다.
-        val invitee = bossPartyMemberRepository.findByBossPartyIdAndCharacterMemberEmail(partyId, userEmail)
+        val invitee = bossPartyMemberRepository.findByBossPartyIdAndCharacterMemberEmailInvited(partyId, userEmail)
             ?: throw AccessDeniedException("이 파티에 초대받은 기록이 없습니다.")
 
         // 상태 검증: 이미 수락했거나 다른 상태인지 확인
