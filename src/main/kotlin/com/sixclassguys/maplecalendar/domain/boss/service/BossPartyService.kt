@@ -102,8 +102,8 @@ class BossPartyService(
         val mapping = MemberBossPartyMapping(
             bossPartyId = savedParty.id,
             memberId = member.id, // 캐릭터가 속한 계정(Member) ID
-            isPartyAlarmEnabled = true, // 기본값 true
-            isChatAlarmEnabled = true   // 기본값 true
+            isPartyAlarmEnabled = false, // 기본값 true
+            isChatAlarmEnabled = false   // 기본값 true
         )
         memberBossPartyMappingRepository.save(mapping)
 
@@ -623,8 +623,8 @@ class BossPartyService(
             val mapping = MemberBossPartyMapping(
                 bossPartyId = bossParty.id,
                 memberId = character.member.id, // 캐릭터가 속한 계정(Member) ID
-                isPartyAlarmEnabled = true, // 기본값 true
-                isChatAlarmEnabled = true   // 기본값 true
+                isPartyAlarmEnabled = false, // 기본값 true
+                isChatAlarmEnabled = false   // 기본값 true
             )
             memberBossPartyMappingRepository.save(mapping)
         }
