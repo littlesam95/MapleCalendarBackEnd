@@ -130,8 +130,11 @@ class NotificationService(
             val member = partyMember.character.member
             val targetCharacterId = partyMember.character.id
 
+            val mapping = memberBossPartyMappingRepository.findByMemberIdAndBossPartyId(member.id, partyId)
+            val isChatAlarmEnabled = mapping?.isChatAlarmEnabled ?: true // 매핑 정보 없으면 기본값 true
+
             // 본인 제외 AND 현재 채팅방 접속자 제외
-            if (targetCharacterId != senderCharacterId && !activeCharacterIds.contains(targetCharacterId)) {
+            if (targetCharacterId != senderCharacterId && !activeCharacterIds.contains(targetCharacterId) && isChatAlarmEnabled) {
                 member.tokens.forEach { tokenEntity ->
                     val message = Message.builder()
                         .setToken(tokenEntity.token)
@@ -290,7 +293,8 @@ class NotificationService(
     ) {
         // 1. 추방된 멤버와 현재 파티에 남은 모든 멤버(ACCEPTED)를 한꺼번에 조회
         // (target은 이미 delete 되었을 수 있으므로, Service에서 넘겨받은 ID와 Name 정보를 활용합니다)
-        val remainingMembers = bossPartyMemberRepository.findAllWithMemberAndTokensByPartyId(partyId, JoinStatus.ACCEPTED)
+        val remainingMembers =
+            bossPartyMemberRepository.findAllWithMemberAndTokensByPartyId(partyId, JoinStatus.ACCEPTED)
 
         // 2. 추방된 멤버 정보 조회 (알림용)
         val kickedMember = mapleCharacterRepository.findByIdOrNull(kickedCharacter.id)?.member
@@ -309,7 +313,10 @@ class NotificationService(
                 .putData("contentId", partyId.toString())
                 .build()
 
-            try { FirebaseMessaging.getInstance().send(message) } catch (e: Exception) { /* 로그 생략 */ }
+            try {
+                FirebaseMessaging.getInstance().send(message)
+            } catch (e: Exception) { /* 로그 생략 */
+            }
         }
 
         // 💡 B. 남은 파티원들(파티장 포함)에게 보내는 알림
@@ -329,7 +336,10 @@ class NotificationService(
                     .putData("contentId", partyId.toString())
                     .build()
 
-                try { FirebaseMessaging.getInstance().send(message) } catch (e: Exception) { /* 로그 생략 */ }
+                try {
+                    FirebaseMessaging.getInstance().send(message)
+                } catch (e: Exception) { /* 로그 생략 */
+                }
             }
         }
     }
@@ -344,7 +354,8 @@ class NotificationService(
         bossDifficulty: BossDifficulty
     ) {
         // 1. 남은 멤버(ACCEPTED) 조회
-        val remainingMembers = bossPartyMemberRepository.findAllWithMemberAndTokensByPartyId(partyId, JoinStatus.ACCEPTED)
+        val remainingMembers =
+            bossPartyMemberRepository.findAllWithMemberAndTokensByPartyId(partyId, JoinStatus.ACCEPTED)
 
         val leavedMember = mapleCharacterRepository.findByIdOrNull(leaver.id)?.member
 
@@ -369,7 +380,10 @@ class NotificationService(
                 .putData("contentId", partyId.toString())
                 .build()
 
-            try { FirebaseMessaging.getInstance().send(message) } catch (e: Exception) { /* 로그 생략 */ }
+            try {
+                FirebaseMessaging.getInstance().send(message)
+            } catch (e: Exception) { /* 로그 생략 */
+            }
         }
 
         remainingMembers.forEach { partyMember ->
@@ -619,12 +633,12 @@ class NotificationService(
         }
     }
 
-//    @Transactional
-//    fun unregisterToken(apiKey: String, token: String) {
-//        val member = memberService.findByRawKey(apiKey)
-//            ?: return // 유저가 없으면 이미 로그아웃된 것으로 간주
-//
-//        notificationTokenRepository.deleteByMemberAndToken(member, token)
-//        log.info("토큰 삭제 완료: 유저=${member.id}, 토큰=${token.take(10)}...")
-//    }
+    @Transactional
+    fun unregisterToken(userEmail: String, token: String) {
+        val member = memberRepository.findByEmail(userEmail)
+            ?: throw IllegalArgumentException("존재하지 않는 사용자입니다.")
+
+        notificationTokenRepository.deleteByMemberAndToken(member, token)
+        log.info("토큰 삭제 완료: 유저=${member.id}, 토큰=${token.take(10)}...")
+    }
 }

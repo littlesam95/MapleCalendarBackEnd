@@ -1,8 +1,12 @@
 package com.sixclassguys.maplecalendar.domain.notification.controller
 
+import com.sixclassguys.maplecalendar.domain.auth.dto.TokenRequest
 import com.sixclassguys.maplecalendar.domain.notification.dto.FcmTokenRequest
 import com.sixclassguys.maplecalendar.domain.notification.service.NotificationService
 import org.springframework.http.ResponseEntity
+import org.springframework.security.core.annotation.AuthenticationPrincipal
+import org.springframework.security.core.userdetails.UserDetails
+import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
@@ -21,13 +25,13 @@ class NotificationController(
         return ResponseEntity.ok().build()
     }
 
-//    @DeleteMapping("/tokens")
-//    fun unregisterToken(
-//        @RequestHeader("x-nxopen-api-key") apiKey: String,
-//        @RequestBody request: TokenRequest,
-//    ): ResponseEntity<Unit> {
-//        notificationService.unregisterToken(apiKey, request.token)
-//
-//        return ResponseEntity.ok().build()
-//    }
+    @DeleteMapping("/tokens")
+    fun unregisterToken(
+        @AuthenticationPrincipal userDetails: UserDetails,
+        @RequestBody request: TokenRequest,
+    ): ResponseEntity<Unit> {
+        notificationService.unregisterToken(userDetails.username, request.refreshToken)
+
+        return ResponseEntity.ok().build()
+    }
 }
