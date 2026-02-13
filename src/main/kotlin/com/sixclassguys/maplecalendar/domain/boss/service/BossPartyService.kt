@@ -664,16 +664,16 @@ class BossPartyService(
             ?: throw IllegalStateException("존재하지 않거나 삭제된 파티입니다.")
 
         // 해당 유저가 이 파티에 초대된 기록이 있는지 조회
-        val bpm = bossPartyMemberRepository.findByBossPartyIdAndCharacterMemberEmailInvited(partyId, userEmail)
+        val invitee = bossPartyMemberRepository.findByBossPartyIdAndCharacterMemberEmailInvited(partyId, userEmail)
             ?: throw AccessDeniedException("해당 파티에 초대받은 기록이 없습니다.")
 
         // 초대(INVITED) 상태일 때만 거절 가능
-        if (bpm.joinStatus != JoinStatus.INVITED) {
-            throw IllegalStateException("거절할 수 없는 상태입니다. (현재 상태: ${bpm.joinStatus})")
+        if (invitee.joinStatus != JoinStatus.INVITED) {
+            throw IllegalStateException("거절할 수 없는 상태입니다. (현재 상태: ${invitee.joinStatus})")
         }
 
         // 초대 정보 삭제 (거절)
-        bossPartyMemberRepository.delete(bpm)
+        invitee.joinStatus = JoinStatus.DELETED
 
         // 파티장에게 거절 알림 발송
         TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
@@ -681,7 +681,7 @@ class BossPartyService(
             override fun afterCommit() {
                 notificationService.sendBossPartyDeclineAlarm(
                     partyId = partyId,
-                    declinerCharacter = bpm.character,
+                    declinerCharacter = invitee.character,
                     partyTitle = bossParty.title,
                     boss = bossParty.boss,
                     bossDifficulty = bossParty.difficulty
@@ -715,7 +715,7 @@ class BossPartyService(
             throw IllegalStateException("파티장은 추방할 수 없습니다")
         }
 
-        bossPartyMemberRepository.delete(target)
+        target.joinStatus = JoinStatus.DELETED
 
         TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
 
@@ -753,7 +753,7 @@ class BossPartyService(
         // 3. 1명만 남은 경우 처리
         if (acceptedMembers.size == 1) {
             bossParty.isDeleted = true
-            bossPartyMemberRepository.delete(bpm)
+            bpm.joinStatus = JoinStatus.DELETED
             return getBossParties(userEmail)
         }
 
