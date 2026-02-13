@@ -584,9 +584,9 @@ class BossPartyService(
     fun inviteMember(partyId: Long, inviteeId: Long, userEmail: String) {
 //        val bossParty = bossPartyRepository.findById(partyId).orElseThrow { AccessDeniedException("존재하지 않거나 삭제된 파티입니다.") }
         val bossParty = bossPartyRepository.findByIdAndIsDeletedFalse(partyId)
-            ?: throw IllegalStateException("존재하지 않거나 삭제된 파티입니다.")
+            ?: throw BossPartyNotFoundException()
 
-        val character =  mapleCharacterRepository.findById(inviteeId).orElseThrow { AccessDeniedException("캐릭터 정보가 없습니다.") }
+        val character =  mapleCharacterRepository.findById(inviteeId).orElseThrow { MapleCharacterNotFoundException() }
 
         if (character.member.email == userEmail) {
             throw IllegalStateException("자기 자신의 캐릭터를 초대할 수 없습니다.")
@@ -620,6 +620,13 @@ class BossPartyService(
                     joinStatus = JoinStatus.INVITED
                 )
             )
+            val mapping = MemberBossPartyMapping(
+                bossPartyId = bossParty.id,
+                memberId = character.member.id, // 캐릭터가 속한 계정(Member) ID
+                isPartyAlarmEnabled = true, // 기본값 true
+                isChatAlarmEnabled = true   // 기본값 true
+            )
+            memberBossPartyMappingRepository.save(mapping)
         }
 
         TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
