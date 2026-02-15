@@ -50,4 +50,15 @@ class EventController(
 
         return ResponseEntity.ok(events)
     }
+
+        @GetMapping("/daily")
+    fun getDailyEvents(
+        @RequestParam year: Int,
+        @RequestParam month: Int,
+        @RequestParam day: Int
+    ): ResponseEntity<List<EventResponse>> {
+        val events = eventService.getTodayEvents(year, month, day, "")
+
+        return ResponseEntity.ok(events)
+    }
 }

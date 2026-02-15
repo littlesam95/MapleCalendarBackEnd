@@ -36,7 +36,7 @@ class SecurityConfig(
             .authorizeHttpRequests {
                 it.requestMatchers(HttpMethod.POST, "/api/boss-parties/*/alarms").permitAll()
                 it.requestMatchers(
-                    "/api/events/today",
+                    "/api/events/daily",
                     "/api/auth/**",
                     "/api/character/**",
                     "/api/boss-parties/**",
