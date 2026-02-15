@@ -25,6 +25,7 @@ import com.sixclassguys.maplecalendar.domain.notification.entity.NotificationTok
 import com.sixclassguys.maplecalendar.domain.notification.repository.NotificationTokenRepository
 import com.sixclassguys.maplecalendar.global.dto.AlarmType
 import com.sixclassguys.maplecalendar.global.dto.RedisAlarmDto
+import com.sixclassguys.maplecalendar.global.exception.MemberNotFoundException
 import com.sixclassguys.maplecalendar.global.util.AlarmProducer
 import com.sixclassguys.maplecalendar.infrastructure.persistence.event.EventRepository
 import org.slf4j.LoggerFactory
@@ -636,7 +637,7 @@ class NotificationService(
     @Transactional
     fun unregisterToken(userEmail: String, token: String) {
         val member = memberRepository.findByEmail(userEmail)
-            ?: throw IllegalArgumentException("존재하지 않는 사용자입니다.")
+            ?: throw MemberNotFoundException()
 
         notificationTokenRepository.deleteByMemberAndToken(member, token)
         log.info("토큰 삭제 완료: 유저=${member.id}, 토큰=${token.take(10)}...")
