@@ -39,6 +39,7 @@ class SecurityConfig(
                     "/api/events/daily",
                     "/api/auth/**",
                     "/api/character/**",
+                    "/api/notifications/**",
                     "/api/boss-parties/**",
                     "/api/test/s3/**",
                     "/ws-chat/**"
