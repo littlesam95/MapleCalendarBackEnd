@@ -14,4 +14,11 @@ interface MapleBgmRepository : JpaRepository<MapleBgm, Long> {
 
     // 2. 최신 차트: ID 내림차순 (또는 createdAt)
     fun findAllByOrderByIdDesc(pageable: Pageable): Slice<MapleBgm>
+
+    // 3. BGM 검색
+    fun findAllByTitleContainingOrMapNameContainingOrderByIdDesc(
+        title: String,
+        mapName: String,
+        pageable: Pageable
+    ): Slice<MapleBgm>
 }

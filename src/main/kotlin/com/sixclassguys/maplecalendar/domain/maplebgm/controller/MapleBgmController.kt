@@ -61,6 +61,17 @@ class MapleBgmController(
         return ResponseEntity.ok(response)
     }
 
+    @GetMapping("/search")
+    fun searchBgms(
+        @AuthenticationPrincipal userDetails: UserDetails,
+        @RequestParam query: String,
+        @RequestParam(defaultValue = "0") page: Int,
+        @RequestParam(defaultValue = "20") size: Int,
+    ): ResponseEntity<Slice<MapleBgmResponse>> {
+        val response = mapleBgmService.searchBgms(userDetails.username, query, page, size)
+        return ResponseEntity.ok(response)
+    }
+
     @PostMapping("/bgm/{bgmId}/like")
     fun toggleLike(
         @AuthenticationPrincipal userDetails: UserDetails,

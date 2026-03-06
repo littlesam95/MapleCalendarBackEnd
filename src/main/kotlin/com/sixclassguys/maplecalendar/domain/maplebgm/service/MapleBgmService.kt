@@ -119,6 +119,19 @@ class MapleBgmService(
     }
 
     @Transactional(readOnly = true)
+    fun searchBgms(userEmail: String, query: String, page: Int, size: Int): Slice<MapleBgmResponse> {
+        val member = memberRepository.findByEmail(userEmail) ?: throw MemberNotFoundException()
+        val pageable = PageRequest.of(page, size)
+
+        // 제목 또는 맵 이름 둘 중 하나라도 query를 포함하면 결과에 포함
+        val bgmSlice = mapleBgmRepository.findAllByTitleContainingOrMapNameContainingOrderByIdDesc(
+            query, query, pageable
+        )
+
+        return mergeUserStatus(member, bgmSlice)
+    }
+
+    @Transactional(readOnly = true)
     fun getTopBgms(userEmail: String, page: Int, size: Int): Slice<MapleBgmResponse> {
         val member = memberRepository.findByEmail(userEmail)
             ?: throw MemberNotFoundException()
