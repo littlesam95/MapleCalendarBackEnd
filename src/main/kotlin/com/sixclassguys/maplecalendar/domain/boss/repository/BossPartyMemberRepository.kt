@@ -13,7 +13,7 @@ interface BossPartyMemberRepository : JpaRepository<BossPartyMember, Long> {
 
     fun existsByBossPartyIdAndCharacterId(bossPartyId: Long, characterId: Long): Boolean
 
-    @Query("SELECT m FROM BossPartyMember m JOIN FETCH m.character c WHERE m.bossParty.id = :partyId")
+    @Query("SELECT m FROM BossPartyMember m JOIN FETCH m.character c WHERE m.bossParty.id = :bossPartyId")
     fun findAllByBossPartyId(bossPartyId: Long): List<BossPartyMember>
 
     @Query("""
