@@ -31,7 +31,6 @@ import com.sixclassguys.maplecalendar.infrastructure.persistence.event.EventRepo
 import org.slf4j.LoggerFactory
 import org.springframework.data.redis.core.RedisTemplate
 import org.springframework.data.repository.findByIdOrNull
-import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDate
@@ -120,7 +119,6 @@ class NotificationService(
         }
     }
 
-    @Async("characterSyncExecutor")
     @Transactional(readOnly = true)
     fun sendBossPartyChatAlarm(partyId: Long, senderCharacterId: Long, content: String, senderName: String) {
         // 1. 해당 파티의 승인된 멤버들 조회
@@ -128,6 +126,7 @@ class NotificationService(
 
         // 2. 현재 웹소켓 세션에 연결된 캐릭터 ID 목록 가져오기
         val activeCharacterIds = BossPartyChatWebSocketHandler.getActiveCharacterIds(partyId)
+        val messages = mutableListOf<Message>()
 
         members.forEach { partyMember ->
             val member = partyMember.character.member
@@ -152,17 +151,25 @@ class NotificationService(
                         .putData("contentId", partyId.toString())
                         .build()
 
-                    try {
-                        FirebaseMessaging.getInstance().send(message)
-                    } catch (e: Exception) {
-                        log.error("❌ 채팅 알림 발송 실패: 유저=${member.id}, 토큰=${tokenEntity.token.take(10)}")
+                    messages.add(message)
+                }
+            }
+        }
+
+        if (messages.isNotEmpty()) {
+            val response = FirebaseMessaging.getInstance().sendEach(messages)
+            if (response.failureCount > 0) {
+                log.warn("파티 알림 중 일부 전송 실패 (총 ${messages.size}건 중 ${response.failureCount}건 실패)")
+                response.responses.forEachIndexed { index, sendResponse ->
+                    if (!sendResponse.isSuccessful) {
+                        // 실패한 토큰과 사유 로그 (필요 시)
+                        log.error("실패 토큰 인덱스[$index]: ${sendResponse.exception.message}")
                     }
                 }
             }
         }
     }
 
-    @Async("characterSyncExecutor")
     @Transactional(readOnly = true)
     fun sendBossPartyInvitationAlarm(
         partyId: Long,
@@ -176,6 +183,7 @@ class NotificationService(
             ?: return
 
         val member = invitee.character.member
+        val messages = mutableListOf<Message>()
 
         member.tokens.forEach { tokenEntity ->
             val message = Message.builder()
@@ -190,16 +198,23 @@ class NotificationService(
                 .putData("contentId", partyId.toString())
                 .build()
 
-            try {
-                FirebaseMessaging.getInstance().send(message)
-                log.info("💌 파티 초대 알림 발송 성공: 유저=${member.id}, 캐릭터=${invitee.character.characterName}")
-            } catch (e: Exception) {
-                log.error("❌ 초대 알림 발송 실패: 토큰=${tokenEntity.token.take(10)}..., 사유=${e.message}")
+            messages.add(message)
+        }
+
+        if (messages.isNotEmpty()) {
+            val response = FirebaseMessaging.getInstance().sendEach(messages)
+            if (response.failureCount > 0) {
+                log.warn("파티 알림 중 일부 전송 실패 (총 ${messages.size}건 중 ${response.failureCount}건 실패)")
+                response.responses.forEachIndexed { index, sendResponse ->
+                    if (!sendResponse.isSuccessful) {
+                        // 실패한 토큰과 사유 로그 (필요 시)
+                        log.error("실패 토큰 인덱스[$index]: ${sendResponse.exception.message}")
+                    }
+                }
             }
         }
     }
 
-    @Async("characterSyncExecutor")
     @Transactional(readOnly = true)
     fun sendBossPartyAcceptanceAlarm(
         partyId: Long,
@@ -209,6 +224,7 @@ class NotificationService(
         bossDifficulty: BossDifficulty
     ) {
         val members = bossPartyMemberRepository.findAllWithMemberAndTokensByPartyId(partyId, JoinStatus.ACCEPTED)
+        val messages = mutableListOf<Message>()
 
         members.forEach { partyMember ->
             val member = partyMember.character.member
@@ -241,17 +257,24 @@ class NotificationService(
                 }
 
                 val message = messageBuilder.build()
+                messages.add(message)
+            }
+        }
 
-                try {
-                    FirebaseMessaging.getInstance().send(message)
-                } catch (e: Exception) {
-                    log.error("❌ 알림 발송 실패: 유저=${member.id}, 사유=${e.message}")
+        if (messages.isNotEmpty()) {
+            val response = FirebaseMessaging.getInstance().sendEach(messages)
+            if (response.failureCount > 0) {
+                log.warn("파티 알림 중 일부 전송 실패 (총 ${messages.size}건 중 ${response.failureCount}건 실패)")
+                response.responses.forEachIndexed { index, sendResponse ->
+                    if (!sendResponse.isSuccessful) {
+                        // 실패한 토큰과 사유 로그 (필요 시)
+                        log.error("실패 토큰 인덱스[$index]: ${sendResponse.exception.message}")
+                    }
                 }
             }
         }
     }
 
-    @Async("characterSyncExecutor")
     @Transactional(readOnly = true)
     fun sendBossPartyDeclineAlarm(
         partyId: Long,
@@ -266,6 +289,7 @@ class NotificationService(
             ?: return
 
         val member = leader.character.member
+        val messages = mutableListOf<Message>()
 
         member.tokens.forEach { tokenEntity ->
             val message = Message.builder()
@@ -280,16 +304,23 @@ class NotificationService(
                 .putData("contentId", partyId.toString())
                 .build()
 
-            try {
-                FirebaseMessaging.getInstance().send(message)
-                log.info("🚫 거절 알림 발송 성공: 파티장 유저=${member.id}, 거절자=${declinerCharacter.characterName}")
-            } catch (e: Exception) {
-                log.error("❌ 거절 알림 발송 실패: 파티장 토큰=${tokenEntity.token.take(10)}, 사유=${e.message}")
+            messages.add(message)
+        }
+
+        if (messages.isNotEmpty()) {
+            val response = FirebaseMessaging.getInstance().sendEach(messages)
+            if (response.failureCount > 0) {
+                log.warn("파티 알림 중 일부 전송 실패 (총 ${messages.size}건 중 ${response.failureCount}건 실패)")
+                response.responses.forEachIndexed { index, sendResponse ->
+                    if (!sendResponse.isSuccessful) {
+                        // 실패한 토큰과 사유 로그 (필요 시)
+                        log.error("실패 토큰 인덱스[$index]: ${sendResponse.exception.message}")
+                    }
+                }
             }
         }
     }
 
-    @Async("characterSyncExecutor")
     @Transactional(readOnly = true)
     fun sendBossPartyKickAlarm(
         partyId: Long,
@@ -302,6 +333,7 @@ class NotificationService(
         // (target은 이미 delete 되었을 수 있으므로, Service에서 넘겨받은 ID와 Name 정보를 활용합니다)
         val remainingMembers =
             bossPartyMemberRepository.findAllWithMemberAndTokensByPartyId(partyId, JoinStatus.ACCEPTED)
+        val messages = mutableListOf<Message>()
 
         // 2. 추방된 멤버 정보 조회 (알림용)
         val kickedMember = mapleCharacterRepository.findByIdOrNull(kickedCharacter.id)?.member
@@ -320,10 +352,7 @@ class NotificationService(
                 .putData("contentId", partyId.toString())
                 .build()
 
-            try {
-                FirebaseMessaging.getInstance().send(message)
-            } catch (e: Exception) { /* 로그 생략 */
-            }
+            messages.add(message)
         }
 
         // 💡 B. 남은 파티원들(파티장 포함)에게 보내는 알림
@@ -343,15 +372,24 @@ class NotificationService(
                     .putData("contentId", partyId.toString())
                     .build()
 
-                try {
-                    FirebaseMessaging.getInstance().send(message)
-                } catch (e: Exception) { /* 로그 생략 */
+                messages.add(message)
+            }
+        }
+
+        if (messages.isNotEmpty()) {
+            val response = FirebaseMessaging.getInstance().sendEach(messages)
+            if (response.failureCount > 0) {
+                log.warn("파티 알림 중 일부 전송 실패 (총 ${messages.size}건 중 ${response.failureCount}건 실패)")
+                response.responses.forEachIndexed { index, sendResponse ->
+                    if (!sendResponse.isSuccessful) {
+                        // 실패한 토큰과 사유 로그 (필요 시)
+                        log.error("실패 토큰 인덱스[$index]: ${sendResponse.exception.message}")
+                    }
                 }
             }
         }
     }
 
-    @Async("characterSyncExecutor")
     @Transactional(readOnly = true)
     fun sendBossPartyLeaveAlarm(
         partyId: Long,
@@ -364,6 +402,7 @@ class NotificationService(
         // 1. 남은 멤버(ACCEPTED) 조회
         val remainingMembers =
             bossPartyMemberRepository.findAllWithMemberAndTokensByPartyId(partyId, JoinStatus.ACCEPTED)
+        val messages = mutableListOf<Message>()
 
         val leavedMember = mapleCharacterRepository.findByIdOrNull(leaver.id)?.member
 
@@ -388,10 +427,7 @@ class NotificationService(
                 .putData("contentId", partyId.toString())
                 .build()
 
-            try {
-                FirebaseMessaging.getInstance().send(message)
-            } catch (e: Exception) { /* 로그 생략 */
-            }
+            messages.add(message)
         }
 
         remainingMembers.forEach { partyMember ->
@@ -410,16 +446,24 @@ class NotificationService(
                     .putData("contentId", partyId.toString())
                     .build()
 
-                try {
-                    FirebaseMessaging.getInstance().send(message)
-                } catch (e: Exception) {
-                    log.error("❌ 탈퇴 알림 발송 실패: 유저=${member.id}, 사유=${e.message}")
+                messages.add(message)
+            }
+        }
+
+        if (messages.isNotEmpty()) {
+            val response = FirebaseMessaging.getInstance().sendEach(messages)
+            if (response.failureCount > 0) {
+                log.warn("파티 알림 중 일부 전송 실패 (총 ${messages.size}건 중 ${response.failureCount}건 실패)")
+                response.responses.forEachIndexed { index, sendResponse ->
+                    if (!sendResponse.isSuccessful) {
+                        // 실패한 토큰과 사유 로그 (필요 시)
+                        log.error("실패 토큰 인덱스[$index]: ${sendResponse.exception.message}")
+                    }
                 }
             }
         }
     }
 
-    @Async("characterSyncExecutor")
     @Transactional(readOnly = true)
     fun sendBossPartyTransferAlarm(
         partyId: Long,
@@ -430,6 +474,7 @@ class NotificationService(
     ) {
         // 1. 파티의 모든 승인된 멤버(ACCEPTED) 조회
         val members = bossPartyMemberRepository.findAllWithMemberAndTokensByPartyId(partyId, JoinStatus.ACCEPTED)
+        val messages = mutableListOf<Message>()
 
         members.forEach { partyMember ->
             val member = partyMember.character.member
@@ -456,10 +501,19 @@ class NotificationService(
                     .putData("newLeaderId", newLeader.id.toString())
                     .build()
 
-                try {
-                    FirebaseMessaging.getInstance().send(message)
-                } catch (e: Exception) {
-                    log.error("❌ 양도 알림 발송 실패: 유저=${member.id}, 사유=${e.message}")
+                messages.add(message)
+            }
+        }
+
+        if (messages.isNotEmpty()) {
+            val response = FirebaseMessaging.getInstance().sendEach(messages)
+            if (response.failureCount > 0) {
+                log.warn("파티 알림 중 일부 전송 실패 (총 ${messages.size}건 중 ${response.failureCount}건 실패)")
+                response.responses.forEachIndexed { index, sendResponse ->
+                    if (!sendResponse.isSuccessful) {
+                        // 실패한 토큰과 사유 로그 (필요 시)
+                        log.error("실패 토큰 인덱스[$index]: ${sendResponse.exception.message}")
+                    }
                 }
             }
         }
