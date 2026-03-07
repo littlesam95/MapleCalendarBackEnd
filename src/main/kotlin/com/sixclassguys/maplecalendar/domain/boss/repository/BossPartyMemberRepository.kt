@@ -13,6 +13,7 @@ interface BossPartyMemberRepository : JpaRepository<BossPartyMember, Long> {
 
     fun existsByBossPartyIdAndCharacterId(bossPartyId: Long, characterId: Long): Boolean
 
+    @Query("SELECT m FROM BossPartyMember m JOIN FETCH m.character c WHERE m.bossParty.id = :partyId")
     fun findAllByBossPartyId(bossPartyId: Long): List<BossPartyMember>
 
     @Query("""
@@ -21,7 +22,7 @@ interface BossPartyMemberRepository : JpaRepository<BossPartyMember, Long> {
     JOIN FETCH c.member mem
     WHERE m.bossParty.id IN :partyIds 
     AND m.joinStatus = :joinStatus
-""")
+    """)
     fun findAllWithMemberByPartyIds(
         @Param("partyIds") partyIds: List<Long>,
         @Param("joinStatus") joinStatus: JoinStatus
@@ -34,7 +35,7 @@ interface BossPartyMemberRepository : JpaRepository<BossPartyMember, Long> {
     LEFT JOIN FETCH mem.tokens
     WHERE m.bossParty.id = :partyId 
     AND m.joinStatus = :joinStatus
-""")
+    """)
     fun findAllWithMemberAndTokensByPartyId(
         @Param("partyId") partyId: Long,
         @Param("joinStatus") joinStatus: JoinStatus

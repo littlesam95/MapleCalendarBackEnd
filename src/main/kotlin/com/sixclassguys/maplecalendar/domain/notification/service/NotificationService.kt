@@ -31,6 +31,7 @@ import com.sixclassguys.maplecalendar.infrastructure.persistence.event.EventRepo
 import org.slf4j.LoggerFactory
 import org.springframework.data.redis.core.RedisTemplate
 import org.springframework.data.repository.findByIdOrNull
+import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDate
@@ -119,6 +120,7 @@ class NotificationService(
         }
     }
 
+    @Async("characterSyncExecutor")
     @Transactional(readOnly = true)
     fun sendBossPartyChatAlarm(partyId: Long, senderCharacterId: Long, content: String, senderName: String) {
         // 1. 해당 파티의 승인된 멤버들 조회
@@ -160,6 +162,7 @@ class NotificationService(
         }
     }
 
+    @Async("characterSyncExecutor")
     @Transactional(readOnly = true)
     fun sendBossPartyInvitationAlarm(
         partyId: Long,
@@ -196,6 +199,7 @@ class NotificationService(
         }
     }
 
+    @Async("characterSyncExecutor")
     @Transactional(readOnly = true)
     fun sendBossPartyAcceptanceAlarm(
         partyId: Long,
@@ -247,6 +251,7 @@ class NotificationService(
         }
     }
 
+    @Async("characterSyncExecutor")
     @Transactional(readOnly = true)
     fun sendBossPartyDeclineAlarm(
         partyId: Long,
@@ -284,6 +289,7 @@ class NotificationService(
         }
     }
 
+    @Async("characterSyncExecutor")
     @Transactional(readOnly = true)
     fun sendBossPartyKickAlarm(
         partyId: Long,
@@ -345,6 +351,7 @@ class NotificationService(
         }
     }
 
+    @Async("characterSyncExecutor")
     @Transactional(readOnly = true)
     fun sendBossPartyLeaveAlarm(
         partyId: Long,
@@ -412,6 +419,7 @@ class NotificationService(
         }
     }
 
+    @Async("characterSyncExecutor")
     @Transactional(readOnly = true)
     fun sendBossPartyTransferAlarm(
         partyId: Long,
