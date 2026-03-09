@@ -154,6 +154,8 @@ class BossPartyService(
         val member = memberRepository.findByEmail(userEmail)
             ?: throw MemberNotFoundException()
 
+        val isGlobalEnabled = member.isGlobalAlarmEnabled
+
         // 1. 파티원 리스트 변환 (기존 로직 동일)
         val memberDetails = party.members.filter{ it.joinStatus == JoinStatus.ACCEPTED }.map { m ->
             BossPartyMemberDetail(
@@ -197,8 +199,8 @@ class BossPartyService(
             members = memberDetails,
             alarms = alarmTimes, // 👈 조회된 리스트 주입
             isLeader = isLeader,
-            isPartyAlarmEnabled = mapping?.isPartyAlarmEnabled ?: true,
-            isChatAlarmEnabled = mapping?.isChatAlarmEnabled ?: true,
+            isPartyAlarmEnabled = if (!isGlobalEnabled) false else mapping?.isPartyAlarmEnabled ?: false,
+            isChatAlarmEnabled = if (!isGlobalEnabled) false else mapping?.isChatAlarmEnabled ?: false,
             alarmDayOfWeek = party.alarmDayOfWeek,
             alarmHour = party.alarmHour,
             alarmMinute = party.alarmMinute,
