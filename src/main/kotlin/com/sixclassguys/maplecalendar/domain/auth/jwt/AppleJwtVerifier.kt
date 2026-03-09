@@ -20,6 +20,8 @@ import java.util.Base64
 class AppleJwtVerifier(
     @Value("\${apple.client-id}")
     private val appleClientId: String,
+    @Value("\${apple.service-id}")
+    private val appleServiceId: String,
     private val restTemplate: RestTemplate = RestTemplate()
 ) {
     private val APPLE_KEYS_URL = "https://appleid.apple.com/auth/keys"
@@ -31,7 +33,7 @@ class AppleJwtVerifier(
 
 
     fun verify(idToken: String): AppleUserInfo? = try {
-        val claims = Jwts.parserBuilder()
+        val jws = Jwts.parserBuilder()
             .setSigningKeyResolver(object : SigningKeyResolverAdapter() {
                 override fun resolveSigningKey(header: JwsHeader<*>, claims: Claims): Key {
                     val kid = header["kid"] as String
@@ -39,10 +41,18 @@ class AppleJwtVerifier(
                 }
             })
             .requireIssuer("https://appleid.apple.com")
-            .requireAudience(appleClientId)
             .build()
             .parseClaimsJws(idToken)
-            .body
+
+        val claims = jws.body
+        val audience = claims.audience
+
+        // 허용된 Audience 리스트 확인 (iOS App ID, Android Service ID)
+        val allowedAudiences = listOf(appleClientId, appleServiceId)
+
+        if (!allowedAudiences.contains(audience)) {
+            throw IllegalArgumentException("Expected aud claim to be one of $allowedAudiences, but was: $audience")
+        }
 
         AppleUserInfo(
             sub = claims.subject,

@@ -88,6 +88,7 @@ jobs:
           GOOGLE_OAUTH_CLIENT_IDS_0: ${{ secrets.GOOGLE_CLIENT_ID_WEB }}
           GOOGLE_OAUTH_CLIENT_IDS_1: ${{ secrets.GOOGLE_CLIENT_ID_ANDROID }}
           APPLE_CLIENT_ID: ${{ secrets.APPLE_CLIENT_ID }}
+          APPLE_SERVICE_ID: ${{ secrets.APPLE_SERVICE_ID }}
           IMAGE_TAG: latest
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
@@ -106,6 +107,7 @@ jobs:
             export GOOGLE_OAUTH_CLIENT_IDS_0=${GOOGLE_OAUTH_CLIENT_IDS_0}
             export GOOGLE_OAUTH_CLIENT_IDS_1=${GOOGLE_OAUTH_CLIENT_IDS_1}
             export APPLE_CLIENT_ID=${APPLE_CLIENT_ID}
+            export APPLE_SERVICE_ID=${APPLE_SERVICE_ID}
             export JWT_SECRET=${JWT_SECRET}
             export AWS_ACCESS_KEY=${AWS_ACCESS_KEY}
             export AWS_SECRET_KEY=${AWS_SECRET_KEY}
