@@ -11,6 +11,7 @@ import com.sixclassguys.maplecalendar.domain.boss.dto.BossPartyChatMessageRespon
 import com.sixclassguys.maplecalendar.domain.boss.dto.BossPartyDetailResponse
 import com.sixclassguys.maplecalendar.domain.boss.dto.BossPartyMemberDetail
 import com.sixclassguys.maplecalendar.domain.boss.dto.BossPartyScheduleResponse
+import com.sixclassguys.maplecalendar.domain.boss.dto.BossPartySystemEvent
 import com.sixclassguys.maplecalendar.domain.boss.dto.toResponse
 import com.sixclassguys.maplecalendar.domain.boss.entity.BossParty
 import com.sixclassguys.maplecalendar.domain.boss.entity.BossPartyAlarmTime
@@ -39,6 +40,7 @@ import com.sixclassguys.maplecalendar.global.exception.MapleCharacterNotFoundExc
 import com.sixclassguys.maplecalendar.global.exception.MemberNotFoundException
 import com.sixclassguys.maplecalendar.global.util.AlarmProducer
 import org.slf4j.LoggerFactory
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Slice
 import org.springframework.data.domain.Sort
@@ -55,6 +57,7 @@ import java.time.temporal.TemporalAdjusters
 
 @Service
 class BossPartyService(
+    private val eventPublisher: ApplicationEventPublisher,
     private val bossPartyRepository: BossPartyRepository,
     private val bossPartyMemberRepository: BossPartyMemberRepository,
     private val memberBossPartyMappingRepository: MemberBossPartyMappingRepository,
@@ -664,7 +667,20 @@ class BossPartyService(
         // 상태 변경 (수락)
         invitee.joinStatus = JoinStatus.ACCEPTED
 
-        // 2. 🚀 트랜잭션이 성공적으로 COMMIT된 후에만 알림 발송
+        // 추방 안내 메시지를 채팅창에 발행하기
+        val content = "${invitee.character.characterName}님이 파티에 가입되었어요."
+
+        val savedMsg = saveMessage(partyId, invitee.character.id, content, BossPartyChatMessageType.ENTER)
+
+        eventPublisher.publishEvent(
+            BossPartySystemEvent(
+                partyId = partyId,
+                characterId = invitee.character.id,
+                message = savedMsg
+            )
+        )
+
+        // 트랜잭션이 성공적으로 COMMIT된 후에만 알림 발송
         TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
 
             override fun afterCommit() {
@@ -741,6 +757,19 @@ class BossPartyService(
 
         target.joinStatus = JoinStatus.DELETED
 
+        // 추방 안내 메시지를 채팅창에 발행하기
+        val content = "${target.character.characterName}님이 파티에서 추방되었어요."
+
+        val savedMsg = saveMessage(partyId, characterId, content, BossPartyChatMessageType.LEAVE)
+
+        eventPublisher.publishEvent(
+            BossPartySystemEvent(
+                partyId = partyId,
+                characterId = characterId,
+                message = savedMsg
+            )
+        )
+
         TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
 
             override fun afterCommit() {
@@ -809,6 +838,19 @@ class BossPartyService(
         // 5. 본인 데이터 삭제 및 알림 발송
         bpm.joinStatus = JoinStatus.DELETED
         bpm.role = PartyRole.MEMBER
+
+        // 6. 추방 안내 메시지를 채팅창에 발행하기
+        val content = "${bpm.character.characterName}님이 파티에서 탈퇴했어요."
+
+        val savedMsg = saveMessage(partyId, leaverCharacterId, content, BossPartyChatMessageType.LEAVE)
+
+        eventPublisher.publishEvent(
+            BossPartySystemEvent(
+                partyId = partyId,
+                characterId = leaverCharacterId,
+                message = savedMsg
+            )
+        )
 
         TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
 

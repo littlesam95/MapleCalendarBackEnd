@@ -2,6 +2,7 @@ package com.sixclassguys.maplecalendar.domain.boss.handler
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.sixclassguys.maplecalendar.domain.boss.dto.BossPartyChatMessageResponse
+import com.sixclassguys.maplecalendar.domain.boss.dto.BossPartySystemEvent
 import com.sixclassguys.maplecalendar.domain.boss.dto.toResponse
 import com.sixclassguys.maplecalendar.domain.boss.entity.BossPartyChatMessage
 import com.sixclassguys.maplecalendar.domain.boss.service.BossPartyService
@@ -10,6 +11,7 @@ import com.sixclassguys.maplecalendar.domain.boss.enums.BossPartyChatMessageType
 import com.sixclassguys.maplecalendar.domain.notification.service.NotificationService
 import com.sixclassguys.maplecalendar.global.exception.BossPartyNotFoundException
 import com.sixclassguys.maplecalendar.global.exception.MapleCharacterNotFoundException
+import org.springframework.context.event.EventListener
 import org.springframework.stereotype.Component
 import org.springframework.web.socket.CloseStatus
 import org.springframework.web.socket.TextMessage
@@ -38,7 +40,8 @@ class BossPartyChatWebSocketHandler(
         roomSessions.computeIfAbsent(partyId) { CopyOnWriteArrayList() }.add(session)
         activeMembers.computeIfAbsent(partyId) { ConcurrentHashMap.newKeySet() }.add(characterId)
 
-        // DB에 ENTER 타입으로 저장 (필요 시)
+        // 이제 더 이상 채팅방에 입장할 시 시스템 메시지를 출력하지 않음
+        /*
         val character = mapleCharacterRepository.findById(characterId).get()
         val systemMsg = bossPartyService.saveMessage(
             partyId, characterId, "${character.characterName}님이 입장하셨습니다.",
@@ -47,6 +50,7 @@ class BossPartyChatWebSocketHandler(
         val message = systemMsg.toResponse(characterId)
 
         broadcast(partyId, message)
+        */
     }
 
     // 2. 메시지 수신 시
@@ -85,6 +89,8 @@ class BossPartyChatWebSocketHandler(
         roomSessions[partyId]?.remove(session)
         activeMembers[partyId]?.remove(characterId)
 
+        // 이제 더 이상 채팅방에서 퇴장해도 시스템 메시지가 출력되지 않음
+        /*
         val character = mapleCharacterRepository.findById(characterId).get()
         val leaveMsg = bossPartyService.saveMessage(
             partyId,
@@ -95,6 +101,7 @@ class BossPartyChatWebSocketHandler(
         val message = leaveMsg.toResponse(characterId)
 
         broadcast(partyId, message)
+        */
     }
 
     // 유틸리티: URL 쿼리 파라미터에서 partyId 추출 (예: /ws-chat?partyId=1)
@@ -169,6 +176,12 @@ class BossPartyChatWebSocketHandler(
         )
         val jsonResponse = objectMapper.writeValueAsString(deleteResponse)
         roomSessions[partyId]?.filter { it.isOpen }?.forEach { s -> s.sendMessage(TextMessage(jsonResponse)) }
+    }
+
+    @EventListener
+    fun handleBossPartySystemEvent(event: BossPartySystemEvent) {
+        val message = event.message.toResponse(event.characterId)
+        broadcast(event.partyId, message)
     }
 
     companion object {
