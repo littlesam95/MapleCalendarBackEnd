@@ -40,8 +40,6 @@ class BossPartyChatWebSocketHandler(
         roomSessions.computeIfAbsent(partyId) { CopyOnWriteArrayList() }.add(session)
         activeMembers.computeIfAbsent(partyId) { ConcurrentHashMap.newKeySet() }.add(characterId)
 
-        // 이제 더 이상 채팅방에 입장할 시 시스템 메시지를 출력하지 않음
-        /*
         val character = mapleCharacterRepository.findById(characterId).get()
         val systemMsg = bossPartyService.saveMessage(
             partyId, characterId, "${character.characterName}님이 입장하셨습니다.",
@@ -50,7 +48,6 @@ class BossPartyChatWebSocketHandler(
         val message = systemMsg.toResponse(characterId)
 
         broadcast(partyId, message)
-        */
     }
 
     // 2. 메시지 수신 시
@@ -89,8 +86,6 @@ class BossPartyChatWebSocketHandler(
         roomSessions[partyId]?.remove(session)
         activeMembers[partyId]?.remove(characterId)
 
-        // 이제 더 이상 채팅방에서 퇴장해도 시스템 메시지가 출력되지 않음
-        /*
         val character = mapleCharacterRepository.findById(characterId).get()
         val leaveMsg = bossPartyService.saveMessage(
             partyId,
@@ -101,7 +96,6 @@ class BossPartyChatWebSocketHandler(
         val message = leaveMsg.toResponse(characterId)
 
         broadcast(partyId, message)
-        */
     }
 
     // 유틸리티: URL 쿼리 파라미터에서 partyId 추출 (예: /ws-chat?partyId=1)

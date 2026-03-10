@@ -670,7 +670,7 @@ class BossPartyService(
         // 추방 안내 메시지를 채팅창에 발행하기
         val content = "${invitee.character.characterName}님이 파티에 가입되었어요."
 
-        val savedMsg = saveMessage(partyId, invitee.character.id, content, BossPartyChatMessageType.ENTER)
+        val savedMsg = saveMessage(partyId, invitee.character.id, content, BossPartyChatMessageType.JOINED)
 
         eventPublisher.publishEvent(
             BossPartySystemEvent(
@@ -760,7 +760,7 @@ class BossPartyService(
         // 추방 안내 메시지를 채팅창에 발행하기
         val content = "${target.character.characterName}님이 파티에서 추방되었어요."
 
-        val savedMsg = saveMessage(partyId, characterId, content, BossPartyChatMessageType.LEAVE)
+        val savedMsg = saveMessage(partyId, characterId, content, BossPartyChatMessageType.KICKED)
 
         eventPublisher.publishEvent(
             BossPartySystemEvent(
@@ -842,7 +842,7 @@ class BossPartyService(
         // 6. 추방 안내 메시지를 채팅창에 발행하기
         val content = "${bpm.character.characterName}님이 파티에서 탈퇴했어요."
 
-        val savedMsg = saveMessage(partyId, leaverCharacterId, content, BossPartyChatMessageType.LEAVE)
+        val savedMsg = saveMessage(partyId, leaverCharacterId, content, BossPartyChatMessageType.KICKED)
 
         eventPublisher.publishEvent(
             BossPartySystemEvent(
