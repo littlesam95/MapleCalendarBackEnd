@@ -158,23 +158,21 @@ class BossPartyChatWebSocketHandler(
         }
     }
 
-    fun broadcastDelete(partyId: Long, messageId: Long) {
-        val deleteResponse = BossPartyChatMessageResponse(
-            id = messageId,
-            messageType = BossPartyChatMessageType.DELETED,
-            isDeleted = true,
-            senderId = 0L,
-            senderName = "",
-            senderWorld = "",
-            senderImage = "",
-            content = "",
-            unreadCount = 0,
-            isMine = false,
-            isHidden = false,
-            createdAt = "",
-        )
-        val jsonResponse = objectMapper.writeValueAsString(deleteResponse)
-        roomSessions[partyId]?.filter { it.isOpen }?.forEach { s -> s.sendMessage(TextMessage(jsonResponse)) }
+    fun broadcastDelete(partyId: Long, updatedChat: BossPartyChatMessage) {
+        val deletedResponse = updatedChat.toResponse(0L)
+        val jsonResponse = objectMapper.writeValueAsString(deletedResponse)
+
+        roomSessions[partyId]?.forEach { session ->
+            synchronized(session) {
+                if (session.isOpen) {
+                    try {
+                        session.sendMessage(TextMessage(jsonResponse))
+                    } catch (e: Exception) {
+                        println("전송 에러: ${e.message}")
+                    }
+                }
+            }
+        }
     }
 
     @EventListener

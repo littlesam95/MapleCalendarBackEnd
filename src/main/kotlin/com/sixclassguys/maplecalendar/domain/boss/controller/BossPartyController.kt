@@ -219,7 +219,7 @@ class BossPartyController(
         val deletedMessage = bossPartyService.deleteMessage(bossPartyId, messageId, userDetails.username)
 
         // 2. WebSocket으로 모든 파티원에게 "메시지 상태 변경" 알림 전송
-        webSocketHandler.broadcastDelete(deletedMessage.bossParty.id, messageId)
+        webSocketHandler.broadcastDelete(deletedMessage.bossParty.id, deletedMessage)
 
         return ResponseEntity.ok().build()
     }
