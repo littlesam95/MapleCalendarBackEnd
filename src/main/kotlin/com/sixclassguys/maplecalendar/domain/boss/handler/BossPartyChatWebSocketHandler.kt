@@ -113,6 +113,11 @@ class BossPartyChatWebSocketHandler(
     private fun broadcast(partyId: Long, messageResponse: BossPartyChatMessageResponse) {
         val sessions = roomSessions[partyId] ?: return
 
+        if (messageResponse.messageType == BossPartyChatMessageType.ENTER ||
+            messageResponse.messageType == BossPartyChatMessageType.LEAVE) {
+            return
+        }
+
         sessions.forEach { session ->
             // 1. 세션에 저장된 '이 세션의 주인' ID를 꺼냄
             val receiverId = session.attributes["characterId"] as? Long ?: 0L
