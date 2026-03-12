@@ -16,7 +16,9 @@ import com.sixclassguys.maplecalendar.domain.member.entity.Member
 import com.sixclassguys.maplecalendar.domain.member.repository.MemberRepository
 import com.sixclassguys.maplecalendar.global.exception.DuplicateMapleBgmException
 import com.sixclassguys.maplecalendar.global.exception.MapleBgmNotFoundException
+import com.sixclassguys.maplecalendar.global.exception.MapleBgmNotFoundInPlaylistException
 import com.sixclassguys.maplecalendar.global.exception.MapleBgmPlaylistNotFoundException
+import com.sixclassguys.maplecalendar.global.exception.MapleBgmPlaylistUnauthorizedException
 import com.sixclassguys.maplecalendar.global.exception.MemberNotFoundException
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Pageable
@@ -230,7 +232,7 @@ class MapleBgmService(
 
         // 본인 소유이거나 공개된 플레이리스트인 경우에만 조회 가능
         if (!playlist.isPublic && playlist.member.id != member.id) {
-            throw IllegalStateException("접근 권한이 없습니다.")
+            throw MapleBgmPlaylistUnauthorizedException()
         }
 
         // sortOrder 순으로 정렬하여 BGM 리스트 생성
@@ -267,7 +269,9 @@ class MapleBgmService(
         val member = memberRepository.findByEmail(userEmail) ?: throw MemberNotFoundException()
         val playlist = mapleBgmPlaylistRepository.findById(playlistId).orElseThrow()
 
-        if (playlist.member.id != member.id) throw IllegalStateException("권한이 없습니다.")
+        if (playlist.member.id != member.id) {
+            throw MapleBgmPlaylistUnauthorizedException("내 플레이리스트가 아니에요.")
+        }
 
         mapleBgmPlaylistRepository.delete(playlist)
 
@@ -283,7 +287,9 @@ class MapleBgmService(
         val playlist = mapleBgmPlaylistRepository.findById(playlistId).orElseThrow()
 
         // 본인 소유 확인
-        if (playlist.member.id != member.id) throw IllegalStateException("권한이 없습니다.")
+        if (playlist.member.id != member.id) {
+            throw MapleBgmPlaylistUnauthorizedException("내 플레이리스트가 아니에요.")
+        }
 
         val bgm = mapleBgmRepository.findById(bgmId).orElseThrow()
 
@@ -310,13 +316,15 @@ class MapleBgmService(
             ?: throw MemberNotFoundException()
 
         val playlist = mapleBgmPlaylistRepository.findById(playlistId).orElseThrow()
-        if (playlist.member.id != member.id) throw IllegalStateException("권한이 없습니다.")
+        if (playlist.member.id != member.id) {
+            throw MapleBgmPlaylistUnauthorizedException("내 플레이리스트가 아니에요.")
+        }
 
         val bgm = mapleBgmRepository.findById(bgmId)
-            .orElseThrow { NoSuchElementException("존재하지 않는 BGM입니다.") }
+            .orElseThrow { MapleBgmNotFoundException() }
 
         val item = mapleBgmPlaylistItemRepository.findByPlaylistAndBgmAndIsDeletedFalse(playlist, bgm)
-            ?: throw NoSuchElementException("해당 곡이 리스트에 없습니다.")
+            ?: throw MapleBgmNotFoundInPlaylistException()
 
         // 1. 논리적 삭제 처리
         item.isDeleted = true
@@ -340,7 +348,9 @@ class MapleBgmService(
         val playlist = mapleBgmPlaylistRepository.findById(playlistId).orElseThrow { MapleBgmPlaylistNotFoundException() }
 
         // 1. 권한 체크
-        if (playlist.member.id != member.id) throw IllegalStateException("권한 없음")
+        if (playlist.member.id != member.id) {
+            throw MapleBgmPlaylistUnauthorizedException("내 플레이리스트가 아니에요.")
+        }
 
         // 2. 기본 정보 수정 (이름, 공개여부)
         request.name?.let { playlist.name = it }

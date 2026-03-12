@@ -8,6 +8,7 @@ import com.sixclassguys.maplecalendar.domain.eventalarm.repository.EventAlarmRep
 import com.sixclassguys.maplecalendar.domain.member.repository.MemberRepository
 import com.sixclassguys.maplecalendar.global.dto.AlarmType
 import com.sixclassguys.maplecalendar.global.dto.RedisAlarmDto
+import com.sixclassguys.maplecalendar.global.exception.EventNotFoundException
 import com.sixclassguys.maplecalendar.global.exception.MemberNotFoundException
 import com.sixclassguys.maplecalendar.global.util.AlarmProducer
 import com.sixclassguys.maplecalendar.infrastructure.persistence.event.EventRepository
@@ -34,7 +35,7 @@ class AlarmService(
             ?: throw MemberNotFoundException()
 
         val event = eventRepository.findById(request.eventId)
-            .orElseThrow { Exception("Event not found") }
+            .orElseThrow { EventNotFoundException() }
 
         val alarm = eventAlarmRepository.findByMemberAndEvent(member, event)
             ?: EventAlarm(member = member, event = event)
@@ -68,7 +69,7 @@ class AlarmService(
 
             val dto = RedisAlarmDto(
                 type = AlarmType.EVENT,
-                targetId = newTime.id, // 💡 이제 무조건 DB 할당 ID가 들어감
+                targetId = newTime.id,
                 memberId = member.id,
                 contentId = newTime.eventAlarm.event.id,
                 title = "⏰ 설정하신 이벤트 알림 시간이에요!",
@@ -99,7 +100,8 @@ class AlarmService(
         val member = memberRepository.findByEmail(userEmail)
             ?: throw MemberNotFoundException()
 
-        val event = eventRepository.findById(eventId).orElseThrow { throw Exception("Event not found") }
+        val event = eventRepository.findById(eventId)
+            .orElseThrow { EventNotFoundException() }
 
         // 1. 기존 알람 설정을 찾거나, 없으면 새로 생성
         val alarm = eventAlarmRepository.findByMemberAndEvent(member, event)

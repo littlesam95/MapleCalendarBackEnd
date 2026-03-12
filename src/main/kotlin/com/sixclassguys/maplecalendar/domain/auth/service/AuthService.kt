@@ -18,6 +18,12 @@ import com.sixclassguys.maplecalendar.domain.notification.dto.FcmTokenRequest
 import com.sixclassguys.maplecalendar.domain.notification.service.NotificationService
 import com.sixclassguys.maplecalendar.domain.util.getZonedDateTime
 import com.sixclassguys.maplecalendar.global.config.GoogleOAuthProperties
+import com.sixclassguys.maplecalendar.global.exception.DuplicateEmailException
+import com.sixclassguys.maplecalendar.global.exception.ExpiredJwtRefreshTokenException
+import com.sixclassguys.maplecalendar.global.exception.InvalidAppleIdTokenException
+import com.sixclassguys.maplecalendar.global.exception.InvalidGoogleIdTokenException
+import com.sixclassguys.maplecalendar.global.exception.InvalidJwtRefreshTokenException
+import com.sixclassguys.maplecalendar.global.exception.MemberNotFoundException
 import com.sixclassguys.maplecalendar.infrastructure.external.NexonApiClient
 import io.jsonwebtoken.ExpiredJwtException
 import org.slf4j.LoggerFactory
@@ -154,12 +160,12 @@ class AuthService(
             // 2. 토큰 타입이 refresh인지 확인 (JwtUtil에 type 클레임을 넣었으므로 활용 가능)
             val type = claims["type"] as? String
             if (type != "refresh") {
-                throw IllegalArgumentException("잘못된 토큰 타입입니다.")
+                throw InvalidJwtRefreshTokenException()
             }
 
             val email = claims.subject
             val member = memberRepository.findByEmail(email)
-                ?: throw NoSuchElementException("존재하지 않는 사용자입니다.")
+                ?: throw MemberNotFoundException()
 
             // 3. 새로운 토큰 쌍 발급 (Refresh Token Rotation 전략 적용)
             val newAccessToken = jwtUtil.createAccessToken(member.email)
@@ -169,9 +175,9 @@ class AuthService(
 
             return TokenResponse(newAccessToken, newRefreshToken)
         } catch (e: ExpiredJwtException) {
-            throw IllegalAccessException("리프레시 토큰이 만료되었습니다. 다시 로그인해주세요.")
+            throw ExpiredJwtRefreshTokenException()
         } catch (e: Exception) {
-            throw IllegalAccessException("유효하지 않은 리프레시 토큰입니다.")
+            throw InvalidJwtRefreshTokenException()
         }
     }
 
@@ -185,7 +191,7 @@ class AuthService(
 
         log.info("Google Id Token: $idToken")
         val googleIdToken = verifier.verify(idToken)
-            ?: throw IllegalArgumentException("Invalid Google Token")
+            ?: throw InvalidGoogleIdTokenException()
 
         val payload = googleIdToken.payload
         val googleUid = payload.subject // Google의 subject(providerId)
@@ -244,7 +250,7 @@ class AuthService(
 
             // 6. 통합된 LoginResponse 반환
             LoginResponse(
-                id = user.id!!,
+                id = user.id,
                 email = user.email,
                 provider = user.provider,
                 nickname = name,
@@ -277,7 +283,7 @@ class AuthService(
 
         // Apple JWT 검증
         val appleUserInfo = appleJwtVerifier.verify(idToken)
-            ?: throw IllegalArgumentException("Invalid Apple Token")
+            ?: throw InvalidAppleIdTokenException()
 
         val appleUid = appleUserInfo.sub
         val email = appleUserInfo.email
@@ -304,7 +310,7 @@ class AuthService(
         try {
             notificationService.registerToken(
                 request = FcmTokenRequest(token = fcmToken, platform = platform),
-                memberId = user.id!!
+                memberId = user.id
             )
         } catch (e: Exception) {
             log.error("FCM 토큰 업데이트 실패: ${e.message}")
@@ -337,7 +343,7 @@ class AuthService(
             val dojang = nexonApiClient.getDojangInfo(ocid)
 
             LoginResponse(
-                id = user.id!!,
+                id = user.id,
                 email = user.email,
                 provider = user.provider,
                 nickname = user.nickname,
@@ -379,7 +385,7 @@ class AuthService(
             // 이메일 중복 체크
             val existing = memberRepository.findByEmail(email)
             if (existing != null) {
-                throw IllegalArgumentException("Email already exists with a different provider")
+                throw DuplicateEmailException()
             }
 
             member = Member(

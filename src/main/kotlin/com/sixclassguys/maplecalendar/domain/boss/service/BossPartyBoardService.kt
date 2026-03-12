@@ -13,7 +13,9 @@ import com.sixclassguys.maplecalendar.domain.boss.repository.BossPartyBoardLikeR
 import com.sixclassguys.maplecalendar.domain.boss.repository.BossPartyBoardRepository
 import com.sixclassguys.maplecalendar.domain.boss.repository.BossPartyMemberRepository
 import com.sixclassguys.maplecalendar.domain.boss.repository.BossPartyRepository
-import com.sixclassguys.maplecalendar.global.exception.AccessDeniedException
+import com.sixclassguys.maplecalendar.global.exception.BossPartyBoardNotFoundException
+import com.sixclassguys.maplecalendar.global.exception.BossPartyBoardUnauthorizedException
+import com.sixclassguys.maplecalendar.global.exception.BossPartyMemberNotFoundException
 import com.sixclassguys.maplecalendar.global.exception.BossPartyNotFoundException
 import com.sixclassguys.maplecalendar.global.service.S3Service
 import org.springframework.data.domain.Pageable
@@ -47,9 +49,8 @@ class BossPartyBoardService(
 
         // 2. 이 파티에 참여 중인 현재 유저의 캐릭터 식별
         // (내가 좋아요를 눌렀는지, 내 글인지 판단하기 위함)
-        val partyMember = bossPartyMemberRepository
-            .findByBossPartyIdAndCharacterMemberEmail(partyId, userEmail)
-            ?: throw AccessDeniedException("파티 멤버만 게시글을 조회할 수 있습니다.")
+        val partyMember = bossPartyMemberRepository.findByBossPartyIdAndCharacterMemberEmail(partyId, userEmail)
+            ?: throw BossPartyBoardUnauthorizedException()
 
         val currentCharacterId = partyMember.character.id
 
@@ -78,11 +79,11 @@ class BossPartyBoardService(
         // 1. 해당 파티에 가입된(ACCEPTED) 이 사용자의 캐릭터 정보를 조회
         val partyMember = bossPartyMemberRepository
             .findByBossPartyIdAndCharacterMemberEmail(partyId, userEmail)
-            ?: throw AccessDeniedException("파티 멤버가 아닙니다.")
+            ?: throw BossPartyMemberNotFoundException()
 
         // 초대한 상태(INVITED)인 경우 글 작성을 막으려면 체크 추가
         if (partyMember.joinStatus != JoinStatus.ACCEPTED) {
-            throw AccessDeniedException("파티 수락 후 게시글을 작성할 수 있습니다.")
+            throw BossPartyBoardUnauthorizedException("파티 수락 후 게시글을 작성할 수 있어요.")
         }
 
         val character = partyMember.character
@@ -152,11 +153,11 @@ class BossPartyBoardService(
         request: BossPartyBoardLikeRequest
     ): BossPartyBoardResponse {
         val board = bossPartyBoardRepository.findByIdAndBossPartyId(boardId, partyId)
-            ?: throw IllegalArgumentException("게시글을 찾을 수 없습니다.")
+            ?: throw BossPartyBoardNotFoundException()
 
         val partyMember = bossPartyMemberRepository
             .findByBossPartyIdAndCharacterMemberEmail(partyId, userEmail)
-            ?: throw AccessDeniedException("파티 멤버만 좋아요를 누를 수 있습니다.")
+            ?: throw BossPartyBoardUnauthorizedException("파티 멤버만 좋아요를 누를 수 있어요.")
 
         val character = partyMember.character
 

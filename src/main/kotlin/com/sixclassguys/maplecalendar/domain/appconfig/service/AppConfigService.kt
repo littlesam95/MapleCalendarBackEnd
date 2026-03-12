@@ -1,8 +1,9 @@
 package com.sixclassguys.maplecalendar.domain.appconfig.service
 
-import com.sixclassguys.maplecalendar.domain.appconfig.AppVersionConfigRepository
+import com.sixclassguys.maplecalendar.domain.appconfig.repository.AppVersionConfigRepository
 import com.sixclassguys.maplecalendar.domain.appconfig.dto.AppVersionResponse
 import com.sixclassguys.maplecalendar.domain.notification.dto.Platform
+import com.sixclassguys.maplecalendar.global.exception.PlatformNotFoundException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -14,7 +15,7 @@ class AppConfigService(
     @Transactional(readOnly = true)
     fun getUpdateInfo(platform: Platform, currentVersionCode: Int): AppVersionResponse {
         val config = appVersionConfigRepository.findByPlatform(platform)
-            ?: throw Exception("해당 플랫폼의 설정이 없습니다.")
+            ?: throw PlatformNotFoundException()
 
         return AppVersionResponse(
             // 현재 버전이 최신 버전보다 낮으면 업데이트 필요

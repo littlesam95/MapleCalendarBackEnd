@@ -11,11 +11,13 @@ import com.sixclassguys.maplecalendar.domain.member.repository.MemberRepository
 import com.sixclassguys.maplecalendar.domain.member.repository.NexonApiKeyRepository
 import com.sixclassguys.maplecalendar.domain.util.MapleWorld
 import com.sixclassguys.maplecalendar.global.config.EncryptionUtil
-import com.sixclassguys.maplecalendar.global.exception.AccessDeniedException
+import com.sixclassguys.maplecalendar.global.exception.DuplicateApiKeyException
+import com.sixclassguys.maplecalendar.global.exception.RepresentativeCharacterUnauthorizedException
 import com.sixclassguys.maplecalendar.global.exception.InvalidApiKeyException
+import com.sixclassguys.maplecalendar.global.exception.MapleCharacterNotFoundException
+import com.sixclassguys.maplecalendar.global.exception.MemberNotFoundException
 import com.sixclassguys.maplecalendar.infrastructure.external.NexonApiClient
 import com.sixclassguys.maplecalendar.infrastructure.external.dto.AccountCharacter
-import jakarta.persistence.EntityNotFoundException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -44,7 +46,7 @@ class MapleCharacterService(
     @Transactional(readOnly = true)
     fun getGroupedCharacters(email: String): MapleCharacterListResponse {
         val member = memberRepository.findByEmail(email)
-            ?: throw EntityNotFoundException("유저를 찾을 수 없습니다.")
+            ?: throw MemberNotFoundException()
 
         val representativeOcid = member.representativeOcid
         val allCharacters = mapleCharacterRepository.findAllByMember(member)
@@ -71,7 +73,7 @@ class MapleCharacterService(
     // 2. 넥슨 API 캐릭터 페치 로직 수정
     suspend fun fetchCharactersFromNexon(email: String, apiKey: String): MapleCharacterListResponse = coroutineScope {
         val member = memberRepository.findByEmail(email)
-            ?: throw EntityNotFoundException("유저를 찾을 수 없습니다.")
+            ?: throw MemberNotFoundException()
 
         // 1. 우선 넥슨 API로 키 유효성 검증
         val nexonAccounts = nexonApiClient.getCharacters(apiKey)
@@ -94,7 +96,7 @@ class MapleCharacterService(
             )
         } else if (existingKey.member.id != member.id) {
             // [보안] 다른 사람이 이미 등록한 키인 경우 처리 (정책에 따라 결정)
-            throw IllegalStateException("이미 다른 사용자에 의해 등록된 API Key입니다.")
+            throw DuplicateApiKeyException()
         } else {
             // 이미 본인이 등록한 키라면 무시 (정상)
             log.info("이미 등록된 API Key입니다. (Member: ${member.email})")
@@ -126,7 +128,7 @@ class MapleCharacterService(
     @Transactional
     suspend fun registerSelectedCharacters(email: String, ocids: List<String>) = coroutineScope {
         val member = memberRepository.findByEmail(email)
-            ?: throw EntityNotFoundException("유저를 찾을 수 없습니다.")
+            ?: throw MemberNotFoundException()
 
         // 🚀 동시 실행 개수를 5개로 제한하는 세마포어 생성
         val semaphore = Semaphore(5)
@@ -203,7 +205,7 @@ class MapleCharacterService(
     @Transactional(readOnly = true)
     fun getCharacterAuthority(email: String, ocid: String): CharacterAuthorityResponse {
         val member = memberRepository.findByEmail(email)
-            ?: throw EntityNotFoundException("유저를 찾을 수 없습니다.")
+            ?: throw MemberNotFoundException()
 
         // 1. 소유권 확인 (Repository 호출은 여기서!)
         val isOwner = mapleCharacterRepository.existsByMemberAndOcid(member, ocid)
@@ -220,11 +222,11 @@ class MapleCharacterService(
     @Transactional
     fun updateRepresentativeCharacter(email: String, ocid: String) {
         val member = memberRepository.findByEmail(email)
-            ?: throw EntityNotFoundException("유저를 찾을 수 없습니다.")
+            ?: throw MemberNotFoundException()
 
         // 보안 체크: 요청한 OCID가 실제로 이 유저의 캐릭터인지 확인
         val isOwner = mapleCharacterRepository.existsByMemberAndOcid(member, ocid)
-        if (!isOwner) throw AccessDeniedException()
+        if (!isOwner) throw RepresentativeCharacterUnauthorizedException()
 
         member.representativeOcid = ocid
     }
@@ -232,10 +234,10 @@ class MapleCharacterService(
     @Transactional
     fun deleteCharacter(email: String, ocid: String) {
         val member = memberRepository.findByEmail(email)
-            ?: throw EntityNotFoundException("유저를 찾을 수 없습니다.")
+            ?: throw MemberNotFoundException()
 
         val character = mapleCharacterRepository.findByOcidAndMember(ocid, member)
-            ?: throw EntityNotFoundException("해당 캐릭터를 찾을 수 없습니다.")
+            ?: throw MapleCharacterNotFoundException()
 
         // 만약 삭제하려는 캐릭터가 대표 캐릭터라면, 대표 캐릭터 설정도 초기화
         if (member.representativeOcid == ocid) {
@@ -248,7 +250,8 @@ class MapleCharacterService(
     @Async("characterSyncExecutor")
     @Transactional
     fun refreshUserCharacters(memberId: Long) {
-        val member = memberRepository.findById(memberId).orElseThrow()
+        val member = memberRepository.findById(memberId)
+            .orElseThrow { MemberNotFoundException() }
         val existingCharacters = mapleCharacterRepository.findAllByMember(member)
         val processedOcids = mutableSetOf<String>()
 
@@ -348,7 +351,7 @@ class MapleCharacterService(
     // 캐릭터 이름으로 관련 db에 저장된 캐릭터 이름 들어간 캐릭터 찾기
     fun searchCharactersByName(email: String, namePart: String): MapleCharacterListResponse {
         val member = memberRepository.findByEmail(email)
-            ?: throw EntityNotFoundException("유저를 찾을 수 없습니다.")
+            ?: throw MemberNotFoundException()
 
         val characters = mapleCharacterRepository.findAllByCharacterNameContainingIgnoreCase(namePart)
 
