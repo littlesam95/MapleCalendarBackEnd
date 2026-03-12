@@ -567,6 +567,8 @@ class NotificationService(
     }
 
     private fun sendFcmPush(member: Member, alarm: RedisAlarmDto) {
+        val messages = mutableListOf<Message>()
+
         member.tokens.forEach { tokenEntity ->
             val message = Message.builder()
                 .setToken(tokenEntity.token)
@@ -581,17 +583,27 @@ class NotificationService(
                 .putData("contentId", alarm.contentId.toString()) // 추가 정보가 있다면 포함
                 .build()
 
-            try {
-                FirebaseMessaging.getInstance().send(message)
-                log.info("🚀 FCM 데이터 메시지 발송 성공: 유저=${member.id}")
-            } catch (e: Exception) {
-                log.error("❌ FCM 발송 실패: 토큰=${tokenEntity.token.take(10)}..., 사유=${e.message}")
+            messages.add(message)
+        }
+
+        if (messages.isNotEmpty()) {
+            val response = FirebaseMessaging.getInstance().sendEach(messages)
+            if (response.failureCount > 0) {
+                log.warn("파티 알림 중 일부 전송 실패 (총 ${messages.size}건 중 ${response.failureCount}건 실패)")
+                response.responses.forEachIndexed { index, sendResponse ->
+                    if (!sendResponse.isSuccessful) {
+                        // 실패한 토큰과 사유 로그 (필요 시)
+                        log.error("실패 토큰 인덱스[$index]: ${sendResponse.exception.message}")
+                    }
+                }
             }
         }
     }
 
     @Transactional(readOnly = true)
     fun sendRefreshSignal(partyId: Long) {
+        val messages = mutableListOf<Message>()
+
         // 1. 해당 파티의 모든 승인된 멤버 조회
         val members = bossPartyMemberRepository.findAllWithMemberAndTokensByPartyId(partyId, JoinStatus.ACCEPTED)
 
@@ -605,11 +617,20 @@ class NotificationService(
                     .putData("partyId", partyId.toString())
                     .build()
 
-                try {
-                    FirebaseMessaging.getInstance().send(message)
-                    log.info("📡 갱신 신호 발송 완료: 유저=${member.id}")
-                } catch (e: Exception) {
-                    log.error("❌ 갱신 신호 발송 실패: 유저=${member.id}, 사유=${e.message}")
+
+                messages.add(message)
+            }
+        }
+
+        if (messages.isNotEmpty()) {
+            val response = FirebaseMessaging.getInstance().sendEach(messages)
+            if (response.failureCount > 0) {
+                log.warn("파티 알림 중 일부 전송 실패 (총 ${messages.size}건 중 ${response.failureCount}건 실패)")
+                response.responses.forEachIndexed { index, sendResponse ->
+                    if (!sendResponse.isSuccessful) {
+                        // 실패한 토큰과 사유 로그 (필요 시)
+                        log.error("실패 토큰 인덱스[$index]: ${sendResponse.exception.message}")
+                    }
                 }
             }
         }
@@ -628,6 +649,7 @@ class NotificationService(
         val startOfToday = LocalDate.now().atStartOfDay()
         val endOfToday = LocalDate.now().atTime(LocalTime.MAX)
         val endingEvents = eventRepository.findAllByEndDateBetween(startOfToday, endOfToday)
+        val messages = mutableListOf<Message>()
 
         // 2. 메시지 내용 구성 (이벤트 유무에 따라 다르게)
         val title = "메이플 캘린더 오늘의 소식 🍁"
@@ -667,11 +689,19 @@ class NotificationService(
                 )
                 .build()
 
-            try {
-                FirebaseMessaging.getInstance().send(message)
-                log.info("푸시 알림 발송 성공: ${tokenEntity.token.take(8)}...")
-            } catch (e: Exception) {
-                log.error("푸시 알림 발송 실패: ${e.message}")
+            messages.add(message)
+        }
+
+        if (messages.isNotEmpty()) {
+            val response = FirebaseMessaging.getInstance().sendEach(messages)
+            if (response.failureCount > 0) {
+                log.warn("파티 알림 중 일부 전송 실패 (총 ${messages.size}건 중 ${response.failureCount}건 실패)")
+                response.responses.forEachIndexed { index, sendResponse ->
+                    if (!sendResponse.isSuccessful) {
+                        // 실패한 토큰과 사유 로그 (필요 시)
+                        log.error("실패 토큰 인덱스[$index]: ${sendResponse.exception.message}")
+                    }
+                }
             }
         }
     }
