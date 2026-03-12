@@ -20,7 +20,8 @@ class GlobalExceptionHandler {
         InvalidBossPartyKickException::class,
         InvalidBossPartyTransferLeaderException::class,
         InvalidBossPartyAcceptInvitationException::class,
-        AlreadyReportBossPartyChatMessageException::class
+        AlreadyReportBossPartyChatMessageException::class,
+        BossPartyCapacityExceededException::class
     )
     fun handleBadRequest(e: Exception): ResponseEntity<ErrorResponse> {
         return buildResponse(HttpStatus.BAD_REQUEST, e.message)

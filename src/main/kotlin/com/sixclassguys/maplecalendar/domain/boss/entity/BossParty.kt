@@ -8,7 +8,6 @@ import java.time.LocalDateTime
 import org.hibernate.annotations.SQLDelete
 import org.hibernate.annotations.SQLRestriction
 
-
 @Entity
 @Table(name = "boss_party")
 @SQLDelete(sql = "UPDATE boss_party SET is_deleted = true WHERE id = ?")
@@ -43,8 +42,8 @@ class BossParty(
     @Column(name = "alarm_message", length = 100)
     var alarmMessage: String? = null,
 
-    @OneToMany(mappedBy = "bossParty", fetch = FetchType.LAZY)
-    val members: List<BossPartyMember> = emptyList(),
+    @OneToMany(mappedBy = "bossParty", fetch = FetchType.LAZY, cascade = [CascadeType.ALL])
+    val members: List<BossPartyMember> = mutableListOf(),
 
     @Column(name = "created_at")
     var createdAt: LocalDateTime = LocalDateTime.now(),
@@ -54,4 +53,16 @@ class BossParty(
 
     @Column(name = "is_deleted", nullable = false)
     var isDeleted: Boolean = false
-)
+) {
+
+    // 현재 보스와 난이도에 맞는 최대 인원수 반환
+    val maxCapacity: Int
+        get() = boss.getMaxPartyMemberCount(difficulty)
+
+    // 파티가 꽉 찼는지 여부
+    fun isFull(): Boolean = members.size >= maxCapacity
+
+    // 편의를 위해 현재 참여 인원수도 쉽게 가져오게 함
+    val currentMemberCount: Int
+        get() = members.size
+}

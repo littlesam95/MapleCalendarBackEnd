@@ -34,6 +34,7 @@ import com.sixclassguys.maplecalendar.global.dto.RedisAlarmDto
 import com.sixclassguys.maplecalendar.global.exception.AlreadyPartyMemberException
 import com.sixclassguys.maplecalendar.global.exception.BossPartyAlarmNotFoundException
 import com.sixclassguys.maplecalendar.global.exception.BossPartyAlarmUnauthorizedException
+import com.sixclassguys.maplecalendar.global.exception.BossPartyCapacityExceededException
 import com.sixclassguys.maplecalendar.global.exception.BossPartyChatMessageNotFoundException
 import com.sixclassguys.maplecalendar.global.exception.BossPartyInvitationNotFoundException
 import com.sixclassguys.maplecalendar.global.exception.BossPartyMemberNotFoundException
@@ -599,6 +600,10 @@ class BossPartyService(
         val bossParty = bossPartyRepository.findByIdAndIsDeletedFalse(partyId)
             ?: throw BossPartyNotFoundException()
 
+        if (bossParty.isFull()) {
+            throw BossPartyCapacityExceededException()
+        }
+
         val character =  mapleCharacterRepository.findById(inviteeId).orElseThrow { MapleCharacterNotFoundException() }
 
         if (character.member.email == userEmail) {
@@ -616,6 +621,7 @@ class BossPartyService(
                 INVITED -> throw InvitationPendingException()
                 DELETED -> {
                     // 기존 DELETED 기록이 있다면 INVITED로 다시 변경 (재초대)
+                    if (bossParty.isFull()) throw BossPartyCapacityExceededException()
                     exists.joinStatus = INVITED
                     // 필요하다면 초대 시간을 현재 시간으로 갱신
                     // existingMember.joinedAt = LocalDateTime.now()
@@ -661,6 +667,10 @@ class BossPartyService(
     fun acceptInvitation(partyId: Long, userEmail: String): Long {
         val bossParty = bossPartyRepository.findByIdAndIsDeletedFalse(partyId)
             ?: throw BossPartyNotFoundException()
+
+        if (bossParty.isFull()) {
+            throw BossPartyCapacityExceededException()
+        }
 
         // 해당 유저(userEmail)가 이 파티(partyId)에 초대받은(INVITED) 이력이 있는지 조회
         // 만약 한 유저의 여러 캐릭터가 초대될 수 없는 구조라면 단건 조회가 적절합니다.
