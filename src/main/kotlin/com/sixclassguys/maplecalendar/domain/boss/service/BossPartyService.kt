@@ -252,17 +252,17 @@ class BossPartyService(
 
         return alarms.sortedBy { it.alarmTime }.distinctBy { it.bossPartyId }.mapNotNull { alarm ->
             val party = parties.find { it.id == alarm.bossPartyId } ?: return@mapNotNull null
-            val membersInThisParty = membersByPartyId[party.id]?.map { member ->
+            val membersInThisParty = membersByPartyId[party.id]?.map { partyMember ->
                 BossPartyMemberDetail(
-                    characterId = member.character.id,
-                    characterName = member.character.characterName,
-                    worldName = member.character.worldName,
-                    characterClass = member.character.characterClass,
-                    characterLevel = member.character.characterLevel,
-                    characterImage = member.character.characterImage ?: "",
-                    role = member.role,
-                    isMyCharacter = member.character.member.id == member.id,
-                    joinedAt = member.joinedAt.toString()
+                    characterId = partyMember.character.id,
+                    characterName = partyMember.character.characterName,
+                    worldName = partyMember.character.worldName,
+                    characterClass = partyMember.character.characterClass,
+                    characterLevel = partyMember.character.characterLevel,
+                    characterImage = partyMember.character.characterImage ?: "",
+                    role = partyMember.role,
+                    isMyCharacter = partyMember.character.member.id == member.id,
+                    joinedAt = partyMember.joinedAt.toString()
                 )
             }?.sortedByDescending { it.role == PartyRole.LEADER } ?: emptyList()
 
@@ -859,7 +859,6 @@ class BossPartyService(
 
         // 6. 추방 안내 메시지를 채팅창에 발행하기
         val content = "${bpm.character.characterName}님이 파티에서 탈퇴했어요."
-
         val savedMsg = saveMessage(partyId, leaverCharacterId, content, BossPartyChatMessageType.KICKED)
 
         eventPublisher.publishEvent(

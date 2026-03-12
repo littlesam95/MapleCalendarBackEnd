@@ -37,11 +37,13 @@ interface BossPartyAlarmTimeRepository : JpaRepository<BossPartyAlarmTime, Long>
     @Query("""
         SELECT DISTINCT bpat 
         FROM BossPartyAlarmTime bpat
+        JOIN BossPartyMember bpm ON bpat.bossPartyId = bpm.bossParty.id
         JOIN MemberBossPartyMapping mbpm ON bpat.bossPartyId = mbpm.bossPartyId
+        AND mbpm.memberId = bpm.character.member.id
         WHERE mbpm.memberId = :memberId
-          AND mbpm.isPartyAlarmEnabled = true
-          AND bpat.alarmTime >= :startDateTime
-          AND bpat.alarmTime <= :endDateTime
+        AND bpm.joinStatus = 'ACCEPTED'
+        AND bpat.alarmTime >= :startDateTime
+        AND bpat.alarmTime <= :endDateTime
         ORDER BY bpat.alarmTime ASC
     """)
     fun findMemberSchedules(
