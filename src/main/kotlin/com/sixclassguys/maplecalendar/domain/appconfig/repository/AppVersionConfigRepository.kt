@@ -1,4 +1,4 @@
-package com.sixclassguys.maplecalendar.domain.appconfig
+package com.sixclassguys.maplecalendar.domain.appconfig.repository
 
 import com.sixclassguys.maplecalendar.domain.appconfig.entity.AppVersionConfig
 import com.sixclassguys.maplecalendar.domain.notification.dto.Platform
