@@ -2,6 +2,7 @@ package com.sixclassguys.maplecalendar.domain.boss.entity
 
 import com.sixclassguys.maplecalendar.domain.boss.enums.BossDifficulty
 import com.sixclassguys.maplecalendar.domain.boss.enums.BossType
+import com.sixclassguys.maplecalendar.domain.boss.enums.JoinStatus
 import jakarta.persistence.*
 import java.time.DayOfWeek
 import java.time.LocalDateTime
@@ -55,14 +56,18 @@ class BossParty(
     var isDeleted: Boolean = false
 ) {
 
+    // 승인된(ACCEPTED) 멤버들만 필터링해서 가져오는 프로퍼티
+    val acceptedMembers: List<BossPartyMember>
+        get() = members.filter { it.joinStatus == JoinStatus.ACCEPTED }
+
     // 현재 보스와 난이도에 맞는 최대 인원수 반환
     val maxCapacity: Int
         get() = boss.getMaxPartyMemberCount(difficulty)
 
     // 파티가 꽉 찼는지 여부
-    fun isFull(): Boolean = members.size >= maxCapacity
+    fun isFull(): Boolean = currentMemberCount >= maxCapacity
 
     // 편의를 위해 현재 참여 인원수도 쉽게 가져오게 함
     val currentMemberCount: Int
-        get() = members.size
+        get() = acceptedMembers.size
 }
