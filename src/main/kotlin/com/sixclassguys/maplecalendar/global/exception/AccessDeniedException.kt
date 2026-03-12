@@ -1,5 +1,0 @@
-package com.sixclassguys.maplecalendar.global.exception
-
-class AccessDeniedException(
-    override val message: String = "본인의 캐릭터만 대표로 설정할 수 있습니다."
-) : RuntimeException(message)
