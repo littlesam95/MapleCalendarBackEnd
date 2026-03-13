@@ -169,6 +169,7 @@ class BossPartyService(
             ?: throw MemberNotFoundException()
 
         val isGlobalEnabled = member.isGlobalAlarmEnabled
+        val now = LocalDateTime.now()
 
         // 1. 파티원 리스트 변환 (기존 로직 동일)
         val memberDetails = party.members.filter{ it.joinStatus == ACCEPTED }.map { m ->
@@ -192,6 +193,7 @@ class BossPartyService(
         // 2. 🔔 미발송 알람 리스트 조회 (isSent = false)
         val alarmTimes = bossPartyAlarmTimeRepository
             .findByBossPartyIdAndIsSentFalseOrderByAlarmTimeAsc(partyId)
+            .filter { it.alarmTime.isAfter(now) }
             .map {
                 BossPartyAlarmTimeResponse(
                     id = it.id,

@@ -55,7 +55,7 @@ class EventService(
                 eventTypes = event.eventTypes.map { it.name },
                 isRegistered = finalIsRegistered,
                 alarmTimes = if (!isGlobalEnabled) emptyList()
-                else userAlarm?.alarmTimes?.filter { !it.isSent }
+                else userAlarm?.alarmTimes?.filter { !it.isSent && it.alarmTime.isAfter(LocalDateTime.now()) }
                     ?.map { it.alarmTime.toString() }
                     ?.sorted() ?: emptyList(),
             )
