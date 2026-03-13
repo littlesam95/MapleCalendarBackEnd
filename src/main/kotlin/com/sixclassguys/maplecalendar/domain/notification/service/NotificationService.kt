@@ -67,20 +67,22 @@ class NotificationService(
     @Transactional
     fun processEventAlarm(alarm: RedisAlarmDto) {
         // 1. 유효성 검사 (알람이 꺼져있거나 이미 발송되었는지 체크)
-        if (!checkEventAlarmValid(alarm.targetId) || isAlarmCancelled(alarm)) {
+        val alarmTime = eventAlarmTimeRepository.findByIdOrNull(alarm.targetId) ?: return
+        if (alarmTime.isSent || !alarmTime.eventAlarm.isEnabled || isAlarmCancelled(alarm)) {
             log.info("🚫 취소되었거나 유효하지 않은 이벤트 알람입니다. targetId=${alarm.targetId}")
             return
         }
 
         // 2. 대상 유저 조회
-        val member = memberRepository.findByIdOrNull(alarm.memberId)
-            ?: return
+        val member = memberRepository.findByIdOrNull(alarm.memberId) ?: return
+
+        markAsSent(alarm)
+        eventAlarmTimeRepository.saveAndFlush(alarmTime)
 
         // 3. FCM 발송
         sendFcmPush(member, alarm)
 
         // 4. 발송 완료 처리
-        markAsSent(alarm)
         log.info("🎁 이벤트 알람 발송 완료: 유저=${member.id}, targetId=${alarm.targetId}")
     }
 
@@ -93,6 +95,9 @@ class NotificationService(
             log.info("🚫 취소되었거나 이미 처리된 알람입니다. targetId=${alarm.targetId}")
             return
         }
+
+        markAsSent(alarm)
+        bossPartyAlarmTimeRepository.saveAndFlush(alarmTimeEntity)
 
         val partyId = alarm.contentId
 
@@ -111,7 +116,6 @@ class NotificationService(
         }
 
         // 3. 발송 완료 처리 (파티 알람 레코드 1개만 업데이트)
-        markAsSent(alarm)
 
         // 3. 💡 주기 모드(PERIODIC)라면 다음 주 알람 예약 로직 실행
         if (alarmTimeEntity.registrationMode == RegistrationMode.PERIODIC) {
