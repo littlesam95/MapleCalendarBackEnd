@@ -120,6 +120,44 @@ class NotificationService(
     }
 
     @Transactional(readOnly = true)
+    fun sendRefreshSignal(partyId: Long) {
+        val messages = mutableListOf<Message>()
+
+        // 1. 해당 파티의 모든 승인된 멤버 조회
+        val members = bossPartyMemberRepository.findAllWithMemberAndTokensByPartyId(partyId, JoinStatus.ACCEPTED)
+
+        members.forEach { partyMember ->
+            val member = partyMember.character.member
+            member.tokens.forEach { tokenEntity ->
+                val message = Message.builder()
+                    .setToken(tokenEntity.token)
+                    // Notification(알림창) 없이 Data만 포함하여 Silent Push로 전송
+                    .putData("type", "REFRESH_BOSS_ALARM")
+                    .putData("contentId", partyId.toString())
+                    .setAndroidConfig(AndroidConfig.builder()
+                        .setPriority(AndroidConfig.Priority.HIGH)
+                        .build())
+                    .build()
+
+                messages.add(message)
+            }
+        }
+
+        if (messages.isNotEmpty()) {
+            val response = FirebaseMessaging.getInstance().sendEach(messages)
+            if (response.failureCount > 0) {
+                log.warn("파티 알림 중 일부 전송 실패 (총 ${messages.size}건 중 ${response.failureCount}건 실패)")
+                response.responses.forEachIndexed { index, sendResponse ->
+                    if (!sendResponse.isSuccessful) {
+                        // 실패한 토큰과 사유 로그 (필요 시)
+                        log.error("실패 토큰 인덱스[$index]: ${sendResponse.exception.message}")
+                    }
+                }
+            }
+        }
+    }
+
+    @Transactional(readOnly = true)
     fun sendBossPartyChatAlarm(partyId: Long, senderCharacterId: Long, content: String, senderName: String) {
         // 1. 해당 파티의 승인된 멤버들 조회
         val members = bossPartyMemberRepository.findAllWithMemberAndTokensByPartyId(partyId, JoinStatus.ACCEPTED)
@@ -584,42 +622,6 @@ class NotificationService(
                 .build()
 
             messages.add(message)
-        }
-
-        if (messages.isNotEmpty()) {
-            val response = FirebaseMessaging.getInstance().sendEach(messages)
-            if (response.failureCount > 0) {
-                log.warn("파티 알림 중 일부 전송 실패 (총 ${messages.size}건 중 ${response.failureCount}건 실패)")
-                response.responses.forEachIndexed { index, sendResponse ->
-                    if (!sendResponse.isSuccessful) {
-                        // 실패한 토큰과 사유 로그 (필요 시)
-                        log.error("실패 토큰 인덱스[$index]: ${sendResponse.exception.message}")
-                    }
-                }
-            }
-        }
-    }
-
-    @Transactional(readOnly = true)
-    fun sendRefreshSignal(partyId: Long) {
-        val messages = mutableListOf<Message>()
-
-        // 1. 해당 파티의 모든 승인된 멤버 조회
-        val members = bossPartyMemberRepository.findAllWithMemberAndTokensByPartyId(partyId, JoinStatus.ACCEPTED)
-
-        members.forEach { partyMember ->
-            val member = partyMember.character.member
-            member.tokens.forEach { tokenEntity ->
-                val message = Message.builder()
-                    .setToken(tokenEntity.token)
-                    // Notification(알림창) 없이 Data만 포함하여 Silent Push로 전송
-                    .putData("type", "REFRESH_BOSS_ALARM")
-                    .putData("partyId", partyId.toString())
-                    .build()
-
-
-                messages.add(message)
-            }
         }
 
         if (messages.isNotEmpty()) {

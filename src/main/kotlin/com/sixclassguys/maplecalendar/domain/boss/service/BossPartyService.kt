@@ -344,7 +344,12 @@ class BossPartyService(
         )
         alarmProducer.reserveAlarm(dto, alarmDateTime)
 
-        notificationService.sendRefreshSignal(partyId)
+        TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
+
+            override fun afterCommit() {
+                notificationService.sendRefreshSignal(partyId)
+            }
+        })
     }
 
     private fun calculateNextAlarmTime(dayOfWeek: DayOfWeek, hour: Int, minute: Int): LocalDateTime {
@@ -440,7 +445,12 @@ class BossPartyService(
             }
         }
 
-        notificationService.sendRefreshSignal(partyId)
+        TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
+
+            override fun afterCommit() {
+                notificationService.sendRefreshSignal(partyId)
+            }
+        })
     }
 
     @Transactional
@@ -465,7 +475,12 @@ class BossPartyService(
         // isSent를 true로 만들면 리스트 조회(findBy...AndIsSentFalse)에서도 자동으로 제외됩니다.
         alarm.isSent = true
 
-        notificationService.sendRefreshSignal(partyId)
+        TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
+
+            override fun afterCommit() {
+                notificationService.sendRefreshSignal(partyId)
+            }
+        })
     }
 
     @Transactional
