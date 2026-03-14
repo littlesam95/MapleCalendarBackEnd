@@ -182,15 +182,13 @@ class NotificationService(
                 member.tokens.forEach { tokenEntity ->
                     val message = Message.builder()
                         .setToken(tokenEntity.token)
-                        // ✅ 상단 알림 팝업을 띄우기 위해 Notification 추가
-                        .setNotification(
-                            Notification.builder()
-                                .setTitle(senderName)
-                                .setBody(content)
-                                .build()
-                        )
+                        .putData("title", senderName)      // 앱에서 수신 시 title로 사용
+                        .putData("body", content)         // 앱에서 수신 시 body로 사용
                         .putData("type", "BOSSCHAT")
                         .putData("contentId", partyId.toString())
+                        .setAndroidConfig(AndroidConfig.builder()
+                            .setPriority(AndroidConfig.Priority.HIGH)
+                            .build())
                         .build()
 
                     messages.add(message)
@@ -614,15 +612,14 @@ class NotificationService(
         member.tokens.forEach { tokenEntity ->
             val message = Message.builder()
                 .setToken(tokenEntity.token)
-                .setNotification(
-                    Notification.builder()
-                        .setTitle(alarm.title)
-                        .setBody(alarm.message) // 💡 남은 기간 표시
-                        .build()
-                )
+                .putData("title", alarm.title)
+                .putData("body", alarm.message)
                 .putData("type", alarm.type.name)
                 .putData("targetId", alarm.targetId.toString())
                 .putData("contentId", alarm.contentId.toString()) // 추가 정보가 있다면 포함
+                .setAndroidConfig(AndroidConfig.builder()
+                    .setPriority(AndroidConfig.Priority.HIGH)
+                    .build())
                 .build()
 
             messages.add(message)
